@@ -1,0 +1,4 @@
+"Log ID",Date,Description,"Work Time (Formatted)","Work Time (Seconds)","Rest Time (Formatted)","Rest Time (Seconds)","Work Distance","Rest Distance","Stroke Rate/Cadence","Stroke Count",Pace,"Avg Watts",Cal/Hour,"Total Cal","Avg Heart Rate","Drag Factor",Age,Weight,Type,Ranked
+1,2026-09-18 06:30:00,15:00 row,15:00,900,,,3600,,20,300,2:05.0,150,700,175,140,120,30,80,RowErg,No
+2,2026-09-22 06:30:00,15:00 row,15:00,900,,,3700,,20,305,2:01.0,160,720,180,145,120,30,80,RowErg,No
+3,2026-09-25 06:30:00,15:00 row,15:00,900,,,3800,,20,310,1:58.0,170,740,185,150,120,30,80,RowErg,No

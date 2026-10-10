@@ -23,6 +23,7 @@ from personal_trainer.strong.generation import StrongGenerationService
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 # The single session timestamp all fixtures build rows from; see the
 # fixed_session_timestamp fixture below.
@@ -62,7 +63,24 @@ def data_dir(tmp_path: Path) -> Path:
     _clear_pending_workouts(target)
     _empty_generated(target)
     _empty_sessions(target)
+    _seed_concept2(target)
     return target
+
+
+def _seed_concept2(data_root: Path) -> None:
+    """Supply a small synthetic Concept2 export when the real one is absent.
+
+    The athlete's own Concept2 history is personal data and is not committed, so
+    a fresh clone has no concept2 CSV. Tests that exercise rowing reconciliation
+    need one; a synthetic sample keeps the suite self-contained without
+    publishing the athlete's metrics. A developer who has their own file keeps
+    using it.
+    """
+    target = data_root / "history" / "concept2" / "concept2_history.csv"
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(FIXTURES / "concept2_history_sample.csv", target)
 
 
 def _empty_sessions(data_root: Path) -> None:
