@@ -9,7 +9,7 @@ from pathlib import Path
 from personal_trainer.strong.schema import schema_from_template
 from personal_trainer.strong.validation import validate_strong_csv
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+DATA_DIR = Path(__file__).resolve().parent / "fixtures" / "data"
 
 HEADER = (
     "Date,Timezone,Workout,Workout Duration (s),Group,Exercise,Set,"

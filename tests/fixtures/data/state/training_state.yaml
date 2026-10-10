@@ -1,3 +1,8 @@
+# Synthetic baseline state used by the test suite.
+#
+# This is NOT the athlete's real training state: the live state lives in Google
+# Drive. Tests assert against the fixed programme positions below (see
+# tests/test_state_manager.py), so this file is a committed fixture, not data.
 version: 1
 training_preferences:
   desired_sessions_per_week:
@@ -10,19 +15,15 @@ programmes:
     active: true
     modality: lifting
     history_file: history/strong/strong_history.csv
-    reference: programmes/J&T 2.0/reference
+    reference: programmes/J&T 2.0/reference.md
     generated_folder: generated/strong
-    pending_workout:
-      id: 2026-10-10:J&T 2.0 Block 1 Week 1 Day 1
-      date: '2026-10-10'
-      label: J&T 2.0 Block 1 Week 1 Day 1
   pete_plan_beginner:
     active: true
     modality: rowing
     history_file: history/concept2/concept2_history.csv
-    reference: programmes/Beginner Pete Plan/reference
+    reference: programmes/Beginner Pete Plan/reference.md
     latest_confirmed_workout:
-      id: 2026-09-25:15:00 row
+      id: '2026-09-25:15:00 row'
       date: '2026-09-25'
       label: 15:00 row
       programme_position:
@@ -39,5 +40,5 @@ adaptation_policy:
   allow_exercise_substitution: true
 memory:
   preferences:
-  - User prefers flexible training days rather than fixed weekdays.
-  - User prefers explicit targets for rowing.
+    - User prefers flexible training days rather than fixed weekdays.
+    - User prefers explicit targets for rowing.

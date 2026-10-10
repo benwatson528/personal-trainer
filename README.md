@@ -132,8 +132,9 @@ never to route.
 
 `config/config.yaml` selects the backend:
 
-- `local` (default): filesystem under `data/`, mirroring the Drive folder
-  structure. Used for development and tests.
+- `local`: filesystem under `data/`, mirroring the Drive folder structure. Only
+  for local development and the one-off seeding step below; the committed repo
+  ships no `data/` (it is gitignored), so nothing here is public.
 - `drive`: Google Drive, authenticated as your own account. Set
   `storage.root_folder_id` and either `storage.oauth_token_file`
   (recommended) or `storage.credentials_file`.
@@ -153,7 +154,9 @@ Set up Drive once:
    the address bar (`.../folders/<FOLDER_ID>`) into `storage.root_folder_id`.
 4. Point `storage.oauth_token_file` at the token file and set
    `storage.backend: drive`.
-5. Seed Drive from the local data (idempotent — safe to re-run):
+5. If you have an existing local `data/` mirror to upload, seed Drive from it
+   (idempotent — safe to re-run). A fresh clone has no local `data/`: the live
+   files already live in Drive, and the test suite uses `tests/fixtures/`.
    ```bash
    PYTHONPATH=src .venv/bin/python scripts/gdrive_migrate.py
    ```
@@ -414,10 +417,11 @@ lifting exercises, the session file reflects the app's name, not its contents.)
 .venv/bin/python -m pytest tests/ -q
 ```
 
-194 tests. They run against a copy of the real data (`data_dir` fixture) — the
-Concept2 export, the J&T reference document and the day templates — so they
-exercise actual formats rather than invented ones. Strong export parsing is
-exercised through a small real-shape fixture (`tests/fixtures/`).
+194 tests. They run entirely against committed fixtures under `tests/fixtures/`:
+the `data_dir` fixture copies `tests/fixtures/data` per test, giving a synthetic
+Concept2 export, the J&T reference document, the day templates and a fixed
+baseline training state. No test reads the repo-root `data/` mirror or Google
+Drive, so a fresh clone runs green with no personal data present.
 
 Worth knowing about two of them:
 
@@ -425,9 +429,9 @@ Worth knowing about two of them:
   plate combination and asserts the validator agrees at all 200 weights in
   0.25kg steps. It exists because an in-place knapsack silently over-used a
   plate size, making unbuildable weights look reachable.
-- Tests run against a **copy** of `data/` (`data_dir` fixture), and the session
-  timestamp is pinned globally. Without those, live runs leak into the suite and
-  cause spurious failures.
+- The `data_dir` fixture copies `tests/fixtures/data` (never the repo-root
+  `data/` or Drive), and the session timestamp is pinned globally. Without those
+  the wall clock would leak into the suite and cause spurious failures.
 
 ## Repository layout
 
@@ -436,7 +440,7 @@ config/
   config.yaml              storage, LLM, generation, folders
   programmes.yaml          programme registry
   equipment.yaml           the kit you own
-data/                      local backend data (mirrors Drive layout)
+data/                      local scratch mirror of the live Drive root (gitignored)
   programmes/<name>/reference.md
   programmes/<name>/templates/day_N.csv   per-day fill-in CSV skeletons (J&T 2.0)
   history/strong/          landing folder for a completed export to be summarised
@@ -464,4 +468,5 @@ src/
     validation/            action guardrails (adaptation policy, prescriptions)
     storage/               local + Google Drive backends
 tests/                     pytest suite
+  fixtures/data/           self-contained example tree the tests run against
 ```

@@ -291,8 +291,8 @@ def test_reference_defines_the_rm_attempt_weight():
     from pathlib import Path
 
     reference = (
-        Path(__file__).resolve().parents[1]
-        / "data" / "programmes" / "J&T 2.0" / "reference.md"
+        Path(__file__).resolve().parent
+        / "fixtures" / "data" / "programmes" / "J&T 2.0" / "reference.md"
     ).read_text(encoding="utf-8")
 
     # A formula, not just a rep target.

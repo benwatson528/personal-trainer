@@ -14,9 +14,9 @@ TODO
 config/gdrive_client_secret.json
 config/gdrive_token.json
 
-# Personal training data — never commit to a public repo.
-# The live copies live in the user's own Google Drive.
-data/history/concept2/*.csv
-data/history/strong/*.csv
-data/sessions/*.yaml
-data/generated/strong/*.csv
+# Local data/ is a scratch mirror of the live Google Drive contents (state,
+# sessions, history, generated output and programme material). Nothing in it is
+# committed to this public repo; the test suite uses tests/fixtures/ instead.
+# Leading slash anchors this to the repo root so it does NOT match
+# tests/fixtures/data/.
+/data/
