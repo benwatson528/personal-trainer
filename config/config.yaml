@@ -1,0 +1,48 @@
+# Personal Trainer configuration.
+# Secrets are read from environment variables, never stored here.
+
+storage:
+  # "local" for filesystem-backed development, "drive" for Google Drive.
+  backend: drive
+  # Root mirror used only by the local backend / migration scripts.
+  root: ./data
+  # The "Personal Trainer" folder in Drive (from its address bar).
+  root_folder_id: 1BT1wat4Ra0EuYtMPOXTZzO7rOWh9Y6C2
+  # OAuth token written once by `scripts/gdrive_auth.py` (you; files are yours).
+  oauth_token_file: config/gdrive_token.json
+  # Service-account key (Workspace shared drives only). Unused here.
+  credentials_file: null
+
+llm:
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+  # Replaceable without changing PT architecture.
+  model: anthropic/claude-haiku-4.5
+  api_key_env: OPENROUTER_API_KEY
+  temperature: 0.4
+  max_tokens: 4096
+  # USD per million tokens — used only for cost logging in pt.log.
+  price_in: 1.00        # anthropic/claude-haiku-4.5
+  price_out: 5.00
+
+strong_generation:
+  max_validation_retries: 3
+  # Condensed session records (written by the LLM after each workout) shown as
+  # the athlete's training history.
+  history_sample_sessions: 20
+
+session_summary:
+  # Export rows sent to the LLM when condensing one session. A session is ~20
+  # rows, so this covers several recent ones cheaply.
+  summary_rows: 120
+
+folders:
+  programmes: programmes
+  history_strong: history/strong
+  history_concept2: history/concept2
+  # Condensed per-session lifting history, extracted by the LLM after each
+  # workout. Our own format, so Python may read it; the raw app export is never
+  # parsed.
+  sessions: sessions
+  state: state
+  generated_strong: generated/strong

@@ -1,0 +1,561 @@
+"""Tool executor — the LLM's known capabilities (spec sections 37, 38)."""
+
+import json
+
+import pytest
+
+from personal_trainer.integrations.llm import ToolCall
+from personal_trainer.pt.tools import ToolExecutor
+from personal_trainer.validation.actions import ActionValidationError
+
+from conftest import make_llm_response
+
+
+def test_read_state(executor):
+    result = executor.execute("read_state", {})
+    assert result["ok"]
+    assert result["state"]["version"] == 1
+
+
+def test_read_programme_includes_reference(executor):
+    result = executor.execute("read_programme", {"programme_id": "jnt_2"})
+    assert result["ok"]
+    assert "T1" in result["reference"]  # real J&T reference content
+    assert result["programme"]["modality"] == "lifting"
+
+
+def test_read_history_returns_condensed_sessions(executor, storage):
+    from personal_trainer.sessions import SessionSummaries
+
+    SessionSummaries(storage, "sessions").save(
+        "2026-06-23", "J&T 2.0 - 4", "Squat (Barbell): ['100x5']\n"
+    )
+    result = executor.execute("read_history", {"programme_id": "jnt_2", "max_rows": 10})
+    assert result["ok"]
+    assert "Squat (Barbell): ['100x5']" in result["history"]
+
+
+def test_read_history_says_when_no_sessions(executor):
+    result = executor.execute("read_history", {"programme_id": "jnt_2"})
+    assert not result["ok"]
+
+
+def test_read_reference_jt(executor):
+    result = executor.execute("read_reference", {"programme_id": "jnt_2"})
+    assert result["ok"]
+    assert "T1" in result["reference"]
+
+
+def test_read_reference_pete_plan(executor):
+    result = executor.execute("read_reference", {"programme_id": "pete_plan_beginner"})
+    assert result["ok"]
+    assert "24 week" in result["reference"]
+    assert "5000m" in result["reference"]
+    # Blog comments trimmed.
+    assert "Responses to" not in result["reference"]
+
+
+def test_adapt_workout_enforces_policy(executor):
+    prescription = {"exercises": [{"name": "Squat (Barbell)", "sets": 3, "reps": 5, "weight": 100}]}
+    # Within policy: 5% load change.
+    ok = executor.execute("adapt_workout", {
+        "programme_id": "jnt_2",
+        "prescription": prescription,
+        "adaptations": [{"type": "load", "percent": 5}],
+        "reason": "felt strong",
+    })
+    assert ok["ok"]
+    # Beyond policy: 25% load change rejected.
+    bad = executor.execute("adapt_workout", {
+        "programme_id": "jnt_2",
+        "prescription": prescription,
+        "adaptations": [{"type": "load", "percent": 25}],
+        "reason": "felt very strong",
+    })
+    assert not bad["ok"]
+    assert "exceeds" in bad["error"]
+
+
+def test_adapt_workout_rejects_unknown_type(executor):
+    prescription = {"exercises": [{"name": "Squat (Barbell)", "sets": 3, "reps": 5, "weight": 100}]}
+    result = executor.execute("adapt_workout", {
+        "programme_id": "jnt_2",
+        "prescription": prescription,
+        "adaptations": [{"type": "magic", "percent": 1}],
+        "reason": "because",
+    })
+    assert not result["ok"]
+    assert "Unknown adaptation type" in result["error"]
+
+
+def test_validate_strong_csv_tool(executor):
+    from test_strong_generation import VALID_CSV
+
+    good = executor.execute("validate_strong_csv", {"csv": VALID_CSV})
+    assert good["ok"]
+    bad = executor.execute("validate_strong_csv", {"csv": "not,a,csv\n1,2,3\n"})
+    assert not bad["ok"]
+    assert bad["errors"]
+
+
+def test_save_strong_workout_sets_pending(executor, storage):
+    from test_strong_generation import VALID_CSV
+
+    result = executor.execute("save_strong_workout", {
+        "programme_id": "jnt_2",
+        "csv": VALID_CSV,
+        "label": "J&T 2.0 - 1",
+        "date": "2026-09-27",
+    })
+    assert result["ok"]
+    assert result["saved_path"].startswith("generated/strong/")
+    # The saved workout is now pending completion.
+    state = executor.execute("read_state", {})["state"]
+    assert state["programmes"]["jnt_2"]["pending_workout"]["label"] == "J&T 2.0 - 1"
+
+
+def test_recommend_session_saves_generated_workout(executor, stub_llm, storage):
+    """A lifting recommendation must write the CSV to disk, not just build it.
+
+    Regression: generation succeeded but nothing was saved, so the assistant
+    told the user a file was "ready to import" that did not exist.
+    """
+    from datetime import datetime
+
+    from test_strong_generation import (
+        VALID_CSV, prescription_response, validation_response,
+    )
+
+    stub_llm.responses = [
+        prescription_response(),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = executor.execute("recommend_session", {
+        "user_request": "what next?", "recommended_modality": "lifting",
+    })
+    assert "strong_generation" in result, result
+    gen = result["strong_generation"]
+    assert gen["ok"], gen
+    assert gen["saved_path"], "generated CSV was never written to disk"
+    assert storage.exists(gen["saved_path"])
+    assert gen["saved_path"].startswith("generated/strong/")
+    assert gen["saved_path"].endswith(
+        f"_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    )
+    # And it is recorded as the pending prescription awaiting completion.
+    state = executor.execute("read_state", {})["state"]
+    assert state["programmes"]["jnt_2"]["pending_workout"] is not None
+
+
+def test_recommend_session_surfaces_why_it_deviated_from_the_programme(
+    executor, stub_llm,
+):
+    """The prescription's reasoning and adaptations must reach the assistant.
+
+    Regression: they were generated on every workout and then silently
+    discarded by the persist step, so the agent could never explain what it
+    changed or why — while its persona promised to do exactly that.
+    """
+    from test_strong_generation import VALID_CSV, validation_response
+
+    prescription = {
+        "label": "J&T 2.0 - 1",
+        "exercises": [{"name": "Squat (Barbell)", "sets": 2, "reps": 10, "weight": 97.5}],
+        "adaptations": [
+            {"exercise": "Squat (Barbell)", "change": "97.5kg x10, not 110.5kg",
+             "reason": "110.5kg is not loadable on the owned plates"},
+        ],
+        "reasoning": "Week 1 day 1 at 75% of TM, rounded to a loadable weight.",
+    }
+    stub_llm.responses = [
+        make_llm_response(json.dumps(prescription)),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = executor.execute("recommend_session", {
+        "user_request": "what next?", "recommended_modality": "lifting",
+    })
+    gen = result["strong_generation"]
+    assert gen["ok"], gen
+    assert gen["adaptations"], "adaptations were generated but never surfaced"
+    assert gen["adaptations"][0]["exercise"] == "Squat (Barbell)"
+    assert "rounded to a loadable weight" in gen["reasoning"]
+
+
+def test_recommend_session_reports_save_failure_without_claiming_saved(
+    executor, stub_llm, storage, monkeypatch
+):
+    """If the write fails, the result must not claim a file exists."""
+    from test_strong_generation import (
+        VALID_CSV, prescription_response, validation_response,
+    )
+
+    def boom(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(executor._strong, "save", boom)
+    stub_llm.responses = [
+        prescription_response(),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = executor.execute("recommend_session", {
+        "user_request": "what next?", "recommended_modality": "lifting",
+    })
+    gen = result["strong_generation"]
+    assert gen["ok"]  # generation itself worked
+    assert gen["saved_path"] is None
+    assert "disk full" in gen["save_error"]
+    assert "NOT written to disk" in gen["note"]
+
+
+def test_save_strong_workout_rejects_invalid(executor, storage):
+    from test_strong_generation import BROKEN_CSV
+
+    result = executor.execute("save_strong_workout", {
+        "programme_id": "jnt_2",
+        "csv": BROKEN_CSV,
+        "label": "J&T 2.0 - 1",
+        "date": "2026-09-27",
+    })
+    assert not result["ok"]
+    assert "not saved" in result["error"]
+    assert storage.list_files("generated/strong") == []
+
+
+def test_reconcile_workout_tool(executor, storage):
+    from personal_trainer.sessions import SessionSummaries
+
+    # No raw export any more: reconciliation reads the condensed session records.
+    SessionSummaries(storage, "sessions").save(
+        "2026-09-01", "J&T 2.0 - 4", "Squat (Barbell): ['100x5']\n"
+    )
+    result = executor.execute("reconcile_workout", {"programme_id": "jnt_2"})
+    assert result["ok"]
+    assert result["status"] == "confirmed"
+    assert result["state_updated"]
+
+
+def test_set_programme_position_corrects_stale_pointer(executor):
+    """Off-PT training the PT never saw must be settable by the user."""
+    result = executor.execute("set_programme_position", {
+        "programme_id": "jnt_2",
+        "week": 6,
+        "session": "day_2",
+        "description": "upper day, done at the gym",
+        "date": "2026-10-02",
+        "label": "J&T 2.0 Day 2",
+    })
+    assert result["ok"]
+    assert result["changed"]
+    assert result["new_position"]["week"] == 6
+    assert result["new_position"]["session"] == "day_2"
+    # The reference comes back so the LLM can validate the session id.
+    assert "T1" in result["reference"]
+    state = executor.execute("read_state", {})["state"]
+    ref = state["programmes"]["jnt_2"]["latest_confirmed_workout"]
+    assert ref["programme_position"]["week"] == 6
+    assert ref["label"] == "J&T 2.0 Day 2"
+
+
+def test_set_programme_position_clears_stale_pending(executor):
+    """Sessions done outside the PT invalidate the pending prescription."""
+    from test_strong_generation import VALID_CSV
+
+    executor.execute("save_strong_workout", {
+        "programme_id": "jnt_2", "csv": VALID_CSV,
+        "label": "J&T 2.0 - 1", "date": "2026-09-27",
+    })
+    assert executor.execute("read_state", {})["state"]["programmes"]["jnt_2"].get("pending_workout")
+
+    executor.execute("set_programme_position", {
+        "programme_id": "jnt_2", "week": 4, "session": "day_1",
+    })
+    state = executor.execute("read_state", {})["state"]
+    assert "pending_workout" not in state["programmes"]["jnt_2"]
+
+
+def test_set_programme_position_out_of_cycle_does_not_advance(executor):
+    """Off-plan work (easy row after illness) must not move the pointer."""
+    executor.execute("update_state", {
+        "programme_id": "pete_plan_beginner",
+        "confirmed_workout": {
+            "id": "2026-09-25:15:00 row", "date": "2026-09-25", "label": "15:00 row",
+            "programme_position": {"week": 8, "session": "optional_day_4"},
+        },
+    })
+    before = executor.execute("read_state", {})["state"]["programmes"]["pete_plan_beginner"]
+
+    result = executor.execute("set_programme_position", {
+        "programme_id": "pete_plan_beginner", "out_of_cycle": True,
+        "description": "20min easy row after being ill",
+    })
+    assert result["ok"]
+    assert result["changed"] is False
+    assert result["reason"] == "out_of_cycle"
+    after = executor.execute("read_state", {})["state"]["programmes"]["pete_plan_beginner"]
+    assert (after["latest_confirmed_workout"]["programme_position"]
+            == before["latest_confirmed_workout"]["programme_position"])
+
+
+def test_set_programme_position_requires_week_or_session(executor):
+    result = executor.execute("set_programme_position", {"programme_id": "jnt_2"})
+    assert not result["ok"]
+    assert "week" in result["error"].lower()
+
+
+def test_set_programme_position_rejects_unknown_programme(executor):
+    result = executor.execute("set_programme_position", {
+        "programme_id": "nope", "week": 2, "session": "day_1",
+    })
+    assert not result["ok"]
+    assert "Unknown" in result["error"]
+
+
+def test_unknown_tool_returns_error(executor):
+    result = executor.execute("delete_everything", {})
+    assert not result["ok"]
+    assert "Unknown tool" in result["error"]
+
+
+def test_definitions_cover_spec_capabilities(executor):
+    names = {d["function"]["name"] for d in executor.definitions}
+    expected = {
+        "read_state", "read_programme", "read_history",
+        "recommend_session", "adapt_workout", "generate_strong_workout",
+        "validate_strong_csv", "save_strong_workout", "summarise_session",
+        "update_state", "set_programme_position",
+    }
+    assert expected <= names
+
+
+# --- summarise_session -----------------------------------------------------
+
+SUMMARY = """Here it is:
+
+```yaml
+workout: 'J&T 2.0 - 4'
+Squat (Barbell): ['60x5', '80x3', '97.5x10', '91x6', '91x6']
+Deadlift (Barbell): ['60x3', '92.5x10', '92.5x10']
+```
+"""
+
+
+def _queue(stub_llm, content):
+    stub_llm.responses.append(make_llm_response(content))
+    return stub_llm
+
+
+UPLOAD_HEADER = (
+    "Date,Timezone,Workout,Workout Duration (s),Group,Exercise,Set,"
+    "Weight (kg),Reps,RPE,Distance (m),Duration (s),Rest Timer (s),"
+    "Workout Notes,Exercise Notes"
+)
+
+
+@pytest.fixture
+def upload_csv(data_dir):
+    """A completed Strong export dropped at the programme's upload path.
+
+    The export is no longer kept in the repo, so tests that summarise from it
+    must supply one. Thirty rows, so the bounded-window test still sees more
+    than a single session.
+    """
+    rows = [UPLOAD_HEADER]
+    for i in range(30):
+        day = 23 + i // 15
+        rows.append(
+            f"2026-06-{day:02d} 18:00:00,Europe/London (+01:00),J&T 2.0 - 4,3000,,"
+            f"Squat (Barbell),{i % 5 + 1},100,5,,,,,,"
+        )
+    path = data_dir / "history" / "strong" / "strong_history.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(rows) + "\n")
+    return path
+
+
+def test_summarise_session_saves_a_sidecar(executor, stub_llm, storage, upload_csv):
+    _queue(stub_llm, SUMMARY)
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "J&T 2.0 - 4",
+    })
+    assert result["ok"], result
+    assert result["saved_path"].startswith("sessions/2026-06-23_")
+    saved = storage.read(result["saved_path"])
+    assert "date: 2026-06-23" in saved
+    assert "Squat (Barbell): ['60x5', '80x3', '97.5x10', '91x6', '91x6']" in saved
+
+
+def test_summarise_session_sends_raw_rows_verbatim(executor, stub_llm, upload_csv):
+    """The export goes out as text; Python must not reshape it."""
+    _queue(stub_llm, SUMMARY)
+    executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "Legs",
+    })
+    sent = stub_llm.calls[0]["messages"][-1]["content"]
+    # Header plus rows, unaltered — same columns the export has.
+    assert "Weight (kg)" in sent
+    assert "2026-06-23" in sent
+    assert "```yaml" not in sent
+
+
+def test_summarise_session_tells_the_model_how_to_identify_a_session(executor, stub_llm, upload_csv):
+    """A workout name repeats across separate sessions, and the Date column
+    carries a time as well as the day — so the model needs both facts to find
+    the right rows without relying on row position."""
+    _queue(stub_llm, SUMMARY)
+    executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "Legs",
+    })
+    prompt = stub_llm.calls[0]["messages"][-1]["content"]
+    assert "repeats across separate sessions" in prompt
+    assert "match on the date part only" in prompt
+
+
+def test_summarise_session_passes_athlete_feedback_through(executor, stub_llm, upload_csv):
+    """Feedback is the athlete's own words; it goes to the summariser so it can
+    be stored as a note on the session, which is the only place feedback lives."""
+    _queue(stub_llm, SUMMARY)
+    executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "Legs",
+        "feedback": "Squats felt heavy, dropped to 90kg on the last set.",
+    })
+    prompt = stub_llm.calls[0]["messages"][-1]["content"]
+    assert "Squats felt heavy, dropped to 90kg on the last set." in prompt
+    assert "workout_notes" in prompt
+
+
+def test_summarise_session_omits_feedback_when_none_given(executor, stub_llm, upload_csv):
+    _queue(stub_llm, SUMMARY)
+    executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "Legs",
+    })
+    prompt = stub_llm.calls[0]["messages"][-1]["content"]
+    assert "The athlete also said" not in prompt
+
+
+def test_summarise_session_rejects_a_bad_date(executor):
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "23rd June",
+    })
+    assert not result["ok"]
+    assert "YYYY-MM-DD" in result["error"]
+
+
+def test_summarise_session_rejects_an_unknown_programme(executor):
+    result = executor.execute("summarise_session", {
+        "programme_id": "nope", "date": "2026-06-23",
+    })
+    assert not result["ok"]
+    assert "Unknown programme" in result["error"]
+
+
+def test_summarise_session_reports_a_response_with_no_yaml(executor, stub_llm, upload_csv):
+    _queue(stub_llm, "I could not find a session on that date.")
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23",
+    })
+    assert not result["ok"]
+    assert "No YAML block" in result["error"]
+
+
+def test_summarise_session_rejects_a_malformed_summary(executor, stub_llm, upload_csv):
+    _queue(stub_llm, "```yaml\nSquat (Barbell): [heavier than last time]\n```")
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23",
+    })
+    assert not result["ok"]
+    assert "rejected" in result["error"]
+
+
+def test_summarise_session_is_registered(executor):
+    names = {d["function"]["name"] for d in executor.definitions}
+    assert "summarise_session" in names
+
+
+def test_summarise_session_prefers_the_name_on_the_rows(executor, stub_llm, storage, upload_csv):
+    """The export's Workout column is the record; the caller's hint is a guess.
+
+    These disagree in real data — rows for 2026-09-01 read 'Rowing A' while the
+    caller may pass 'Rowing B'. Trusting the hint would mislabel the summary and
+    name the file wrongly.
+    """
+    _queue(stub_llm, "```yaml\nworkout: Rowing A\nBench Press (Barbell): [90x4]\n```")
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-09-01", "workout": "Rowing B",
+    })
+    assert result["ok"], result
+    assert result["workout"] == "Rowing A"
+    assert "workout: Rowing A" in storage.read(result["saved_path"])
+    assert "rowing_a" in result["saved_path"]
+
+
+def test_summarise_session_falls_back_to_the_hint_when_no_name_given(executor, stub_llm, upload_csv):
+    _queue(stub_llm, "```yaml\nBench Press (Barbell): [90x4]\n```")
+    result = executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-09-01", "workout": "Upper",
+    })
+    assert result["ok"], result
+    assert result["workout"] == "Upper"
+
+
+def test_summarise_session_sends_a_bounded_row_window(executor, stub_llm, settings, upload_csv):
+    """The whole export is 8,811 rows (~220k tokens). One session is ~20 rows,
+    so the window must be small."""
+    _queue(stub_llm, SUMMARY)
+    executor.execute("summarise_session", {
+        "programme_id": "jnt_2", "date": "2026-06-23", "workout": "Legs",
+    })
+    prompt = stub_llm.calls[0]["messages"][-1]["content"]
+    rows = [l for l in prompt.splitlines() if l[:4].isdigit()]
+    assert len(rows) <= settings.session_summary.summary_rows
+    assert len(rows) > 20, "must still cover at least one whole session"
+
+
+# --- modality gates history -------------------------------------------------
+
+def test_recommend_rowing_does_not_send_lifting_history(executor):
+    """The lifting export holds rowing sessions among the lifting ones, so
+    dumping it on a rowing request is not just wasteful — it invites the model
+    to plan the wrong session."""
+    result = executor.execute("recommend_session", {
+        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
+    })
+    assert result["ok"]
+    assert result.get("recent_history_md") is None
+    assert "not what you are planning" in result["note"]
+
+
+def test_recommend_rowing_does_not_trigger_generation(executor, stub_llm):
+    executor.execute("recommend_session", {
+        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
+    })
+    assert stub_llm.calls == [], "a rowing request must not spend LLM calls"
+
+
+def test_recommend_lifting_still_sends_history(executor, stub_llm):
+    """Gating must not cost the lifting path the context it relies on for
+    weights and advice."""
+    from test_strong_generation import (
+        VALID_CSV, prescription_response, validation_response,
+    )
+
+    stub_llm.responses = [
+        prescription_response(),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = executor.execute("recommend_session", {
+        "programme_id": "jnt_2", "recommended_modality": "lifting",
+    })
+    assert result["recommended_modality"] == "lifting"
+    assert result["recent_history_md"], "lifting must still get its history"
+    assert "cite actual recent sessions" in result["note"]
+
+
+def test_recommend_echoes_the_modality_it_acted_on(executor):
+    result = executor.execute("recommend_session", {
+        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
+    })
+    assert result["recommended_modality"] == "rowing"

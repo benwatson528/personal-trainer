@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+.idea/
+.env
+logs/
+pt.log
+
+# Secrets — never commit.
+# Google Drive OAuth credentials and token.
+config/gdrive_client_secret.json
+config/gdrive_token.json
+
+# Personal training data — never commit to a public repo.
+# The live copies live in the user's own Google Drive.
+data/history/concept2/*.csv
+data/history/strong/*.csv
+data/sessions/*.yaml
+data/generated/strong/*.csv
