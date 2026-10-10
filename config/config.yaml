@@ -10,8 +10,6 @@ storage:
   # Root mirror used only by the local backend / migration scripts.
   root: ./data
   # Name of the environment variable that provides the Drive root folder id.
-  # Mirrors the LLMConfig.api_key_env pattern: the folder id is never in the
-  # committed config; it lives only in the environment (see .env).
   root_folder_id_env: GDRIVE_ROOT_FOLDER_ID
   # OAuth token written once by `scripts/gdrive_auth.py` (you; files are yours).
   oauth_token_file: secrets/gdrive_token.json
@@ -23,6 +21,7 @@ llm:
   base_url: https://openrouter.ai/api/v1
   # Replaceable without changing PT architecture.
   model: anthropic/claude-haiku-4.5
+  # Name of the environment variable that provides the LLM API key.
   api_key_env: OPENROUTER_API_KEY
   temperature: 0.4
   max_tokens: 4096
