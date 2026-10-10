@@ -12,7 +12,6 @@ training_preferences:
 programmes:
   jnt_2:
     active: true
-    history_file: history/strong/strong_history.csv
     reference: programmes/J&T 2.0/reference.md
     generated_folder: generated/strong
 adaptation_policy:
