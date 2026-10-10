@@ -59,12 +59,13 @@ class GoogleDriveStorageBackend:
     def __init__(self, config: StorageConfig):
         # The folder id comes from the environment so the committed config.yaml
         # never carries a real Drive id. config.yaml is only a local-dev fallback.
-        root_folder_id = os.environ.get("GDRIVE_ROOT_FOLDER_ID") or config.root_folder_id
+        env_name = config.root_folder_id_env
+        root_folder_id = os.environ.get(env_name) or config.root_folder_id
         if not root_folder_id:
             raise ValueError(
-                "storage.root_folder_id is required for the gdrive backend: set "
-                "the GDRIVE_ROOT_FOLDER_ID environment variable (or "
-                "storage.root_folder_id in config.yaml for local development)."
+                f"storage.root_folder_id is required for the gdrive backend: set "
+                f"the {env_name} environment variable (or "
+                f"storage.root_folder_id in config.yaml for local development)."
             )
 
         from googleapiclient.discovery import build
