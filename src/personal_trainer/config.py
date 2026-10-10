@@ -19,13 +19,9 @@ load_dotenv()  # also pick up a .env in the current working directory
 class StorageConfig(BaseModel):
     backend: str = "local"  # "local" | "gdrive"
     root: str = "./data"
-    # Drive root folder id (the "Personal Trainer" folder shared with the app).
-    # Read from the environment variable named by root_folder_id_env at runtime,
-    # so the committed config.yaml never carries a real folder id. The value here
-    # is a fallback for local development only.
-    root_folder_id: str | None = None
     # Name of the environment variable that provides the Drive root folder id.
-    # Mirrors the LLMConfig.api_key_env pattern.
+    # Mirrors the LLMConfig.api_key_env pattern: the folder id is never in the
+    # committed config; it lives only in the environment (see .env).
     root_folder_id_env: str = "GDRIVE_ROOT_FOLDER_ID"
     # Service-account key file. Only usable on Workspace shared drives, because
     # service accounts have no storage quota of their own and cannot own files.

@@ -9,12 +9,9 @@ storage:
   backend: gdrive
   # Root mirror used only by the local backend / migration scripts.
   root: ./data
-  # The "Personal Trainer" folder in Drive. Read at runtime from the
-  # environment variable named by root_folder_id_env (see .env); this value is
-  # only a local-development fallback and is left null in the committed file.
-  root_folder_id: null
   # Name of the environment variable that provides the Drive root folder id.
-  # Mirrors the LLMConfig.api_key_env pattern.
+  # Mirrors the LLMConfig.api_key_env pattern: the folder id is never in the
+  # committed config; it lives only in the environment (see .env).
   root_folder_id_env: GDRIVE_ROOT_FOLDER_ID
   # OAuth token written once by `scripts/gdrive_auth.py` (you; files are yours).
   oauth_token_file: secrets/gdrive_token.json
