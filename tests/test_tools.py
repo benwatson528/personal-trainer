@@ -8,7 +8,7 @@ from personal_trainer.integrations.llm import ToolCall
 from personal_trainer.pt.tools import ToolExecutor
 from personal_trainer.validation.actions import ActionValidationError
 
-from conftest import make_llm_response
+from conftest import SESSION_DATE, make_llm_response
 
 
 def test_read_state(executor):
@@ -105,7 +105,7 @@ def test_save_strong_workout_sets_pending(executor, storage):
         "programme_id": "jnt_2",
         "csv": VALID_CSV,
         "label": "J&T 2.0 - 1",
-        "date": "2026-09-27",
+        "date": SESSION_DATE,
     })
     assert result["ok"]
     assert result["saved_path"].startswith("generated/strong/")
@@ -217,7 +217,7 @@ def test_save_strong_workout_rejects_invalid(executor, storage):
         "programme_id": "jnt_2",
         "csv": BROKEN_CSV,
         "label": "J&T 2.0 - 1",
-        "date": "2026-09-27",
+        "date": SESSION_DATE,
     })
     assert not result["ok"]
     assert "not saved" in result["error"]
@@ -235,6 +235,31 @@ def test_reconcile_workout_tool(executor, storage):
     assert result["ok"]
     assert result["status"] == "confirmed"
     assert result["state_updated"]
+
+
+def test_reconcile_without_position_keeps_progress(executor, storage):
+    """Regression: confirming without restating the position wrote None, which
+    dropped the athlete's progress and sent the next generation back to Day 1."""
+    from personal_trainer.sessions import SessionSummaries
+
+    executor.execute("set_programme_position", {
+        "programme_id": "jnt_2", "week": 3, "session": "day_2",
+        "description": "earlier position", "date": "2026-06-20",
+        "label": "J&T 2.0 - 2",
+    })
+    # A newer session to reconcile against; the position arg is deliberately omitted.
+    SessionSummaries(storage, "sessions").save(
+        "2026-06-23", "J&T 2.0 - 3", "Squat (Barbell): ['100x5']\n"
+    )
+    result = executor.execute("reconcile_workout", {"programme_id": "jnt_2"})
+    assert result["ok"]
+    assert result["found_label"] == "J&T 2.0 - 3"
+    state = executor.execute("read_state", {})["state"]
+    ref = state["programmes"]["jnt_2"]["latest_confirmed_workout"]
+    assert ref["label"] == "J&T 2.0 - 3"
+    # The position carried forward instead of being nulled.
+    assert ref["programme_position"]["week"] == 3
+    assert ref["programme_position"]["session"] == "day_2"
 
 
 def test_set_programme_position_corrects_stale_pointer(executor):
@@ -265,7 +290,7 @@ def test_set_programme_position_clears_stale_pending(executor):
 
     executor.execute("save_strong_workout", {
         "programme_id": "jnt_2", "csv": VALID_CSV,
-        "label": "J&T 2.0 - 1", "date": "2026-09-27",
+        "label": "J&T 2.0 - 1", "date": SESSION_DATE,
     })
     assert executor.execute("read_state", {})["state"]["programmes"]["jnt_2"].get("pending_workout")
 
@@ -534,9 +559,38 @@ def test_recommend_rowing_does_not_trigger_generation(executor, stub_llm):
     assert stub_llm.calls == [], "a rowing request must not spend LLM calls"
 
 
-def test_recommend_lifting_still_sends_history(executor, stub_llm):
-    """Gating must not cost the lifting path the context it relies on for
-    weights and advice."""
+def test_recommend_lifting_sends_only_lifting_history(executor, stub_llm, storage):
+    """Gating must not cost the lifting path the context it relies on for weights
+    and advice — and must not hand it the rowing history that the fixture also
+    holds."""
+    from personal_trainer.sessions import SessionSummaries
+    from test_strong_generation import (
+        VALID_CSV, prescription_response, validation_response,
+    )
+
+    SessionSummaries(storage, "sessions").save(
+        "2026-06-23", "J&T 2.0 - 4", "Squat (Barbell): ['100x5']\n"
+    )
+    stub_llm.responses = [
+        prescription_response(),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = executor.execute("recommend_session", {
+        "programme_id": "jnt_2", "recommended_modality": "lifting",
+    })
+    assert result["recommended_modality"] == "lifting"
+    history = result["recent_history_md"]
+    assert history, "lifting must still get its history"
+    # Only the lifting programme's history, keyed by its id. A rowing entry here
+    # would be the leak this whole gate exists to prevent.
+    assert set(history) == {"jnt_2"}, history
+    assert "Squat (Barbell): ['100x5']" in history["jnt_2"]
+    assert "cite actual recent sessions" in result["note"]
+
+
+def test_recommend_lifting_without_lifting_history_sends_none(executor, stub_llm):
+    """No lifting history yet: the rowing file must not be substituted for it."""
     from test_strong_generation import (
         VALID_CSV, prescription_response, validation_response,
     )
@@ -549,9 +603,8 @@ def test_recommend_lifting_still_sends_history(executor, stub_llm):
     result = executor.execute("recommend_session", {
         "programme_id": "jnt_2", "recommended_modality": "lifting",
     })
-    assert result["recommended_modality"] == "lifting"
-    assert result["recent_history_md"], "lifting must still get its history"
-    assert "cite actual recent sessions" in result["note"]
+    assert result["recent_history_md"] is None
+    assert "not what you are planning" in result["note"]
 
 
 def test_recommend_echoes_the_modality_it_acted_on(executor):

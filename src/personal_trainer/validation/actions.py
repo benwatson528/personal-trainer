@@ -24,7 +24,6 @@ def validate_programme_id(programme_id: str, active_ids: list[str]) -> None:
 def validate_adaptation(
     adaptations: list[dict],
     policy: AdaptationPolicy,
-    prescription: dict | None = None,
 ) -> None:
     """Check proposed adaptations stay within the adaptation policy."""
     for adaptation in adaptations or []:

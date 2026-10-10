@@ -31,7 +31,7 @@ def _brief(value: Any, limit: int = 220) -> str:
     return text if len(text) <= limit else text[:limit] + f"... (+{len(text) - limit})"
 
 from personal_trainer.config import Settings
-from personal_trainer.equipment import load_equipment
+from personal_trainer.equipment import load_equipment_from_storage
 from personal_trainer.integrations.llm import LLMClient
 from personal_trainer.pt.coaching import build_system_prompt
 from personal_trainer.pt.memory import MemoryManager
@@ -201,7 +201,9 @@ class PersonalTrainer:
             programmes=programmes,
             state_yaml=json.dumps(state.model_dump(exclude_none=True), default=str),
             memory=self._memory.all(),
-            equipment=load_equipment().describe_brief(),
+            equipment=load_equipment_from_storage(
+                self._storage, self._settings.folders.equipment_config
+            ).describe_brief(),
         )
 
 

@@ -18,6 +18,10 @@ interpretation: it validates that a file is well-formed enough to be trusted and
 otherwise passes the text through untouched. Re-serialising would mean
 re-quoting keys like `J&T 2.0 - 4`, which is more risk than it saves.
 
+It never parses the raw app export. It does read back its own YAML records (see
+`reconcile_csv`) to rebuild a minimal `Date,Workout` view, but that is our own
+format, not the app's.
+
 These are the lifting history, written by the LLM after each workout. The raw
 app export is no longer kept: generation reads these records and takes the
 Strong CSV format from the day templates.
@@ -63,7 +67,7 @@ def _note_text(value: Any, where: str) -> str:
 
 
 class SessionSummaries:
-    """Reads and writes the condensed session sidecars."""
+    """Reads and writes the condensed session records."""
 
     def __init__(self, storage: StorageBackend, sessions_folder: str):
         self._storage = storage
@@ -205,7 +209,7 @@ class SessionSummaries:
         return value.strip() if isinstance(value, str) and value.strip() else None
 
     def reconcile_csv(self) -> str:
-        """A minimal `Date,Workout` CSV built from the session sidecars.
+        """A minimal `Date,Workout` CSV built from the session records.
 
         Reconciliation only ever needs the workout label and its date, so this
         keeps `reconcile_completion` working now that the raw export is gone.

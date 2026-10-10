@@ -19,7 +19,6 @@ class StrongColumn:
     name: str
     dtype: str  # "string" | "integer" | "number" | "date"
     required: bool
-    example: str = ""
 
 
 @dataclass
@@ -146,6 +145,5 @@ def derive_schema(history_csv: str, sample_rows: int = 10000) -> StrongSchema:
             name=name,
             dtype=dtype,
             required=len(non_empty) == len(values),
-            example=non_empty[0],
         ))
     return StrongSchema(columns=columns)

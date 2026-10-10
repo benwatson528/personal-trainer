@@ -17,9 +17,12 @@ load_dotenv()  # also pick up a .env in the current working directory
 
 
 class StorageConfig(BaseModel):
-    backend: str = "local"  # "local" | "drive"
+    backend: str = "local"  # "local" | "gdrive"
     root: str = "./data"
     # Drive root folder id (the "Personal Trainer" folder shared with the app).
+    # Read from the GDRIVE_ROOT_FOLDER_ID environment variable at runtime, so the
+    # committed config.yaml never carries a real folder id. The value here is a
+    # fallback for local development only.
     root_folder_id: str | None = None
     # Service-account key file. Only usable on Workspace shared drives, because
     # service accounts have no storage quota of their own and cannot own files.
@@ -62,11 +65,14 @@ class SessionSummaryConfig(BaseModel):
 
 class FolderConfig(BaseModel):
     programmes: str = "programmes"
-    history_strong: str = "history/strong"
-    history_concept2: str = "history/concept2"
     sessions: str = "sessions"
     state: str = "state"
     generated_strong: str = "generated/strong"
+    # Content-config files, read through the storage backend so they live in
+    # Drive next to the data they describe rather than in the local repo. Only
+    # config.yaml stays local (it is what tells us where Drive is).
+    programmes_config: str = "config/programmes.yaml"
+    equipment_config: str = "config/equipment.yaml"
 
 
 class Settings(BaseModel):

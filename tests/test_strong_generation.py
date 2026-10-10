@@ -5,7 +5,7 @@ import pytest
 from personal_trainer.integrations.llm import LLMResponse, ToolCall
 from personal_trainer.strong.generation import StrongGenerationService
 
-from conftest import SESSION_TIMESTAMP, make_llm_response
+from conftest import SESSION_DATE, SESSION_TIMESTAMP, make_llm_response
 
 HEADER = (
     "Date,Timezone,Workout,Workout Duration (s),Group,Exercise,Set,"
@@ -232,8 +232,8 @@ def test_save_only_valid_csv(strong_service, stub_llm, storage):
     ]
     result = strong_service.generate("jnt_2")
     assert result.success
-    path = strong_service.save("jnt_2", result.csv, "J&T 2.0 - 1", "2026-09-27")
-    assert path == "generated/strong/J_T_2_0_1_2026-09-27.csv"
+    path = strong_service.save("jnt_2", result.csv, "J&T 2.0 - 1", SESSION_DATE)
+    assert path == f"generated/strong/J_T_2_0_1_{SESSION_DATE}.csv"
     assert storage.exists(path)
 
 
@@ -241,6 +241,38 @@ def test_save_rejects_invalid_csv(strong_service, stub_llm, storage):
     with pytest.raises(Exception):
         strong_service.save("jnt_2", BROKEN_CSV, "J&T 2.0 - 1", "2026-09-27")
     assert not storage.list_files("generated/strong")
+
+
+def test_save_rejects_a_date_that_disagrees_with_the_csv(strong_service, stub_llm, storage):
+    """Final output control: a file must not be filed under a different day than
+    the one its own rows record."""
+    stub_llm.responses = [
+        prescription_response(),
+        make_llm_response("```csv\n" + VALID_CSV + "```"),
+        validation_response(),
+    ]
+    result = strong_service.generate("jnt_2")
+    with pytest.raises(ValueError, match="must match"):
+        strong_service.save("jnt_2", result.csv, "J&T 2.0 - 1", "2026-01-01")
+    assert not storage.list_files("generated/strong")
+
+
+def test_generate_fails_when_the_prescription_is_unparseable(strong_service, stub_llm):
+    """No training decision means nothing to serialise — never emit a CSV."""
+    stub_llm.responses = [make_llm_response("this is not JSON")]
+    result = strong_service.generate("jnt_2")
+    assert not result.success
+    assert any("no workout decision" in e for e in result.errors)
+    # It must not spend a second call asking the model to serialise a decision it
+    # never made.
+    assert len(stub_llm.calls) == 1
+
+
+def test_semantic_validator_unparseable_json_is_an_error(strong_service, stub_llm):
+    """A broken validator verdict is not approval — fail the attempt, not the gate."""
+    stub_llm.responses = [make_llm_response("I could not review this.")]
+    errors = strong_service._validate_workout_content(None, "", "", "", None)
+    assert errors
 
 
 def test_rowing_programme_needs_no_strong_csv(strong_service, stub_llm):

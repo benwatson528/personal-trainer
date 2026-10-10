@@ -160,7 +160,7 @@ def test_missing_schema_columns_skip_the_check():
 
 
 def test_falls_back_to_header_names_without_a_schema():
-    """_resolve prefers the derived schema but still works from a plain header."""
+    """resolve_column prefers the derived schema but still works from a plain header."""
     text = csv_of(row("Squat (Barbell)", "1", 100, 5))
     errors = validate_prescription_fidelity(
         text, prescription(("Squat (Barbell)", 4)), None

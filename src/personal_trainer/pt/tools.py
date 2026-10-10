@@ -170,12 +170,13 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_history",
-            "description": "Read recent workout history for a programme (Strong or Concept2 CSV).",
+            "description": "Read recent workout history for a programme (Strong or Concept2 CSV). Optionally filter by exercise name to find specific lift progression.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "programme_id": {"type": "string"},
                     "max_rows": {"type": "integer", "default": 40},
+                    "exercise": {"type": "string", "description": "Filter to only this exercise (e.g. 'Squat (Barbell)')"}
                 },
                 "required": ["programme_id"],
             },
@@ -516,6 +517,7 @@ class ToolExecutor:
         programme = self._programmes.get(args["programme_id"])
         if programme is None:
             raise ToolError(f"Unknown programme: {args['programme_id']}")
+        exercise_filter = args.get("exercise", "").strip()
         if programme.modality == "lifting":
             # Lifting history is the condensed session records; the raw app
             # export is no longer kept.
@@ -523,6 +525,16 @@ class ToolExecutor:
             if not history.strip():
                 return {"ok": False,
                         "error": f"No condensed sessions recorded yet for {programme.id}"}
+            if exercise_filter:
+                # Filter to only sessions mentioning the exercise.
+                filtered = []
+                for block in history.split("\n\n"):
+                    if exercise_filter.lower() in block.lower():
+                        filtered.append(block)
+                if not filtered:
+                    return {"ok": True, "programme_id": programme.id, "modality": programme.modality,
+                            "history": f"(no sessions found matching '{exercise_filter}')"}
+                history = "\n\n".join(filtered)
             return {
                 "ok": True,
                 "programme_id": programme.id,
@@ -590,18 +602,28 @@ class ToolExecutor:
                     "last_completed_session": None,
                 }
 
-        # Recent history is only relevant once a modality is chosen, and only for
-        # the modality that owns the file. Building it unconditionally meant every
-        # call paid for it — including the "I want to do a workout" turn, where
-        # the only thing needed is the programme position, and where a pile of
-        # rowing rows sitting next to a lifting request is actively misleading.
+        # Recent history is only relevant once a modality is chosen, and only the
+        # chosen modality's own history is safe to send. The Strong export mixes
+        # rowing sessions in with the lifting ones, so a pile of rowing rows next
+        # to a lifting request is actively misleading. Lifting history is the
+        # condensed session records; a rowing turn needs none of it here.
         recommended_modality = args.get("recommended_modality")
         recent_history_md = {}
         if recommended_modality == "lifting":
-            for programme in context.active_programmes:
-                if programme.id in context.recent_history:
-                    recent_history_md[programme.id] = self._history_to_markdown(
-                        context.recent_history[programme.id]
+            lifting_programmes = [
+                p for p in context.active_programmes if p.modality == "lifting"
+            ]
+            if lifting_programmes:
+                lifting_id = lifting_programmes[0].id
+                sessions_history = self._sessions.render(
+                    self._settings.strong_generation.history_sample_sessions
+                )
+                if sessions_history.strip():
+                    recent_history_md[lifting_id] = sessions_history
+                elif lifting_id in context.recent_history:
+                    # A freshly uploaded raw export has not been condensed yet.
+                    recent_history_md[lifting_id] = self._history_to_markdown(
+                        context.recent_history[lifting_id]
                     )
 
         result = {
@@ -648,8 +670,6 @@ class ToolExecutor:
         file could not be written so the LLM never claims a file exists when
         it does not.
         """
-        from datetime import datetime
-
         from ..models import WorkoutRef
 
         date = datetime.now().strftime("%Y-%m-%d")
@@ -716,13 +736,14 @@ class ToolExecutor:
         if not lifting:
             return {"ok": False, "error": "No active lifting programme."}
         schema = self._strong.schema(lifting[0].id)
-        errors = validate_strong_csv(args["csv"], schema)
+        errors = validate_strong_csv(args["csv"], schema, expected_date=args.get("date"))
         return {"ok": not errors, "errors": errors}
 
     def _save_strong_workout(self, args: dict) -> dict:
         validate_programme_id(args["programme_id"], self._active_ids())
-        # Re-validate before saving: only a validated CSV may be written.
-        check = self._validate_strong_csv({"csv": args["csv"]})
+        # Re-validate before saving: only a validated CSV may be written, and it
+        # must belong to the date it is being filed under.
+        check = self._validate_strong_csv({"csv": args["csv"], "date": args["date"]})
         if not check["ok"]:
             return {"ok": False, "error": "CSV failed validation; not saved.",
                     "validation_errors": check["errors"]}
@@ -759,6 +780,14 @@ class ToolExecutor:
             position = None
             if args.get("programme_position"):
                 position = ProgrammePosition(**args["programme_position"])
+            else:
+                # The model may confirm without restating the position. Writing
+                # None here would drop the athlete's progress and silently send
+                # the next generation back to Day 1, so carry the existing
+                # position forward instead.
+                cached = self._state.load().programmes.get(programme.id)
+                if cached and cached.latest_confirmed_workout:
+                    position = cached.latest_confirmed_workout.programme_position
             self._state.update_latest_confirmed(
                 programme.id,
                 WorkoutRef(
@@ -775,7 +804,7 @@ class ToolExecutor:
         return {"ok": result.status == "confirmed", **payload}
 
     def _summarise_session(self, args: dict) -> dict:
-        """Record a completed session: condense the raw export into a sidecar.
+        """Record a completed session: condense the raw export into a session record.
 
         Python hands the LLM the recent export rows as text and asks it to find
         the session and rewrite it compactly. Nothing here parses the export: the

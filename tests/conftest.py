@@ -20,7 +20,6 @@ from personal_trainer.state.manager import StateManager
 from personal_trainer.storage.local import LocalStorageBackend
 from personal_trainer.strong.generation import StrongGenerationService
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 # Self-contained example tree the suite copies per test. Deliberately under
 # tests/ so no test depends on the repo-root data/ mirror, which is only a
@@ -30,6 +29,7 @@ DATA_DIR = FIXTURES / "data"
 # The single session timestamp all fixtures build rows from; see the
 # fixed_session_timestamp fixture below.
 SESSION_TIMESTAMP = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+SESSION_DATE = SESSION_TIMESTAMP[:10]
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def storage(data_dir: Path) -> LocalStorageBackend:
 
 @pytest.fixture
 def programme_manager() -> ProgrammeManager:
-    return ProgrammeManager(PROJECT_ROOT / "config" / "programmes.yaml")
+    return ProgrammeManager.from_file(DATA_DIR / "config" / "programmes.yaml")
 
 
 @pytest.fixture

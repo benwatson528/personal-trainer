@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from pathlib import Path
 
 import pytest
-from conftest import SESSION_TIMESTAMP
+from conftest import DATA_DIR, SESSION_TIMESTAMP
 
 from personal_trainer.equipment import Equipment, Plate
 from personal_trainer.strong.equipment_rules import (
@@ -14,8 +13,6 @@ from personal_trainer.strong.equipment_rules import (
     is_warmup,
     validate_equipment,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 HEADER = (
     "Date,Timezone,Workout,Workout Duration (s),Group,Exercise,Set,"
@@ -188,7 +185,7 @@ def test_real_inventory_loads_itself():
     """Sanity check on the file the athlete actually edits."""
     from personal_trainer.equipment import load_equipment
 
-    equipment = load_equipment(PROJECT_ROOT / "config" / "equipment.yaml")
+    equipment = load_equipment(DATA_DIR / "config" / "equipment.yaml")
     assert not equipment.is_empty
     # Every dumbbell the model could pick must be in the file.
     for weight in (40, 22.5, 10):

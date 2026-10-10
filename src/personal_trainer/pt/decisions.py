@@ -11,7 +11,7 @@ import csv
 import io
 from dataclasses import dataclass, field
 
-from ..models import Programme, ReconciliationResult, SessionDecision, TrainingState
+from ..models import Programme, ReconciliationResult, TrainingState
 from ..programmes.manager import ProgrammeManager
 from ..storage.base import StorageBackend
 
@@ -45,21 +45,6 @@ class DecisionService:
             recent_history=recent_history,
             user_request=user_request,
         )
-
-    def validate_decision(self, decision: SessionDecision, active_ids: list[str]) -> list[str]:
-        """Guardrails for a session decision (spec sections 17, 37)."""
-        errors = []
-        if decision.pt_recommendation not in active_ids:
-            errors.append(
-                f"pt_recommendation '{decision.pt_recommendation}' is not an active programme."
-            )
-        for alt in decision.alternatives:
-            if alt not in active_ids:
-                errors.append(f"alternative '{alt}' is not an active programme.")
-        final = decision.final_session or decision.pt_recommendation
-        if final not in active_ids:
-            errors.append(f"final_session '{final}' is not an active programme.")
-        return errors
 
 
 def reconcile_completion(

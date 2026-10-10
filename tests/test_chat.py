@@ -11,7 +11,7 @@ from personal_trainer.programmes.manager import ProgrammeManager
 from personal_trainer.storage.local import LocalStorageBackend
 
 from app.api import create_app
-from app.chat import PersonalTrainer
+from app.chat import MAX_TOOL_ITERATIONS, PersonalTrainer
 
 from conftest import make_llm_response
 
@@ -19,12 +19,12 @@ from conftest import make_llm_response
 def build_pt(data_dir, llm, settings=None):
     settings = settings or Settings(storage={"backend": "local", "root": str(data_dir)})
     storage = LocalStorageBackend(data_dir)
-    pm = ProgrammeManager("config/programmes.yaml")
+    pm = ProgrammeManager.from_file(data_dir / "config" / "programmes.yaml")
     return PersonalTrainer(settings, storage, llm, pm)
 
 
-def test_health_endpoint():
-    app = create_app(Settings(storage={"backend": "local", "root": "./data"}))
+def test_health_endpoint(data_dir):
+    app = create_app(Settings(storage={"backend": "local", "root": str(data_dir)}))
     client = TestClient(app)
     response = client.get("/health")
     assert response.status_code == 200
@@ -87,7 +87,9 @@ def test_chat_bounded_loop(data_dir, stub_llm):
     pt = build_pt(data_dir, stub_llm)
     response = pt.handle_completion([{"role": "user", "content": "loop"}])
     assert "processing limit" in response["choices"][0]["message"]["content"]
-    assert len(stub_llm.calls) <= 12
+    # The loop must stop after exactly MAX_TOOL_ITERATIONS rounds, not "some"
+    # number: tie the assertion to the constant so raising it is caught.
+    assert len(stub_llm.calls) == MAX_TOOL_ITERATIONS
 
 
 def test_streaming_endpoint(data_dir, stub_llm):
@@ -99,7 +101,14 @@ def test_streaming_endpoint(data_dir, stub_llm):
 
 
 def test_post_workout_flow(data_dir, stub_llm):
-    """'Finished. It was fine.' triggers reconciliation via tools."""
+    """'Finished. It was fine.' triggers reconciliation via tools, which updates
+    the state — not merely a canned reply."""
+    from personal_trainer.sessions import SessionSummaries
+    from personal_trainer.storage.local import LocalStorageBackend
+
+    SessionSummaries(LocalStorageBackend(data_dir), "sessions").save(
+        "2026-06-23", "J&T 2.0 - 4", "Squat (Barbell): ['100x5']\n"
+    )
     stub_llm.responses = [
         make_llm_response(tool_calls=[ToolCall(
             id="call_1", name="reconcile_workout", arguments={"programme_id": "jnt_2"},
@@ -110,4 +119,11 @@ def test_post_workout_flow(data_dir, stub_llm):
     response = pt.handle_completion([
         {"role": "user", "content": "Finished. It was fine."}
     ])
+    # The tool really ran and confirmed against the seeded session record.
+    tool_messages = [m for m in stub_llm.calls[1]["messages"] if m["role"] == "tool"]
+    assert tool_messages, "reconcile_workout result was not fed back to the model"
+    payload = json.loads(tool_messages[0]["content"])
+    assert payload["ok"], payload
+    assert payload["status"] == "confirmed"
+    assert payload["state_updated"]
     assert "confirmed" in response["choices"][0]["message"]["content"]

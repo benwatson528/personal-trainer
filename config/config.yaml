@@ -1,15 +1,20 @@
 # Personal Trainer configuration.
-# Secrets are read from environment variables, never stored here.
+#
+# This file stays local: it is what tells the app where everything else lives,
+# and it contains no secrets. Content-config (programmes.yaml, equipment.yaml)
+# and all training data live in the storage root; secrets live in secrets/.
 
 storage:
-  # "local" for filesystem-backed development, "drive" for Google Drive.
-  backend: drive
+  # "local" for filesystem-backed development, "gdrive" for Google Drive.
+  backend: gdrive
   # Root mirror used only by the local backend / migration scripts.
   root: ./data
-  # The "Personal Trainer" folder in Drive (from its address bar).
-  root_folder_id: 1BT1wat4Ra0EuYtMPOXTZzO7rOWh9Y6C2
+  # The "Personal Trainer" folder in Drive. Read at runtime from the
+  # GDRIVE_ROOT_FOLDER_ID environment variable (see .env); this value is only a
+  # local-development fallback and is left null in the committed file.
+  root_folder_id: null
   # OAuth token written once by `scripts/gdrive_auth.py` (you; files are yours).
-  oauth_token_file: config/gdrive_token.json
+  oauth_token_file: secrets/gdrive_token.json
   # Service-account key (Workspace shared drives only). Unused here.
   credentials_file: null
 
@@ -38,11 +43,12 @@ session_summary:
 
 folders:
   programmes: programmes
-  history_strong: history/strong
-  history_concept2: history/concept2
   # Condensed per-session lifting history, extracted by the LLM after each
   # workout. Our own format, so Python may read it; the raw app export is never
   # parsed.
   sessions: sessions
   state: state
   generated_strong: generated/strong
+  # Content-config, read from the storage root (Drive) at startup.
+  programmes_config: config/programmes.yaml
+  equipment_config: config/equipment.yaml

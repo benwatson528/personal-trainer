@@ -26,7 +26,7 @@ from pathlib import PurePosixPath
 logger = logging.getLogger("personal_trainer.strong.generation")
 
 from ..config import Settings
-from ..equipment import Equipment, load_equipment
+from ..equipment import Equipment, load_equipment_from_storage
 from ..integrations.llm import LLMClient
 from ..programmes.manager import ProgrammeManager
 from ..sessions import SessionSummaries
@@ -60,7 +60,6 @@ class GenerationResult:
     prescription: dict | None = None
     errors: list[str] = field(default_factory=list)
     attempts: int = 0
-    saved_path: str | None = None
     message: str = ""
 
 
@@ -93,7 +92,9 @@ class StrongGenerationService:
                 errors=[f"Programme {programme_id} is not a lifting programme; no Strong CSV needed."],
             )
 
-        equipment = load_equipment()
+        equipment = load_equipment_from_storage(
+            self._storage, self._settings.folders.equipment_config
+        )
         reference = self._load_reference(programme)
         # No history CSV is needed: the Strong format comes from the day
         # templates and the training history from the condensed session records.
@@ -106,6 +107,21 @@ class StrongGenerationService:
         prescription = self._determine_prescription(
             programme, reference, sample, state, user_request, equipment
         )
+        if not prescription or not prescription.get("exercises"):
+            # The prescription is the training decision the CSV is a copy of. If
+            # it is missing, the LLM never made a decision, so there is nothing to
+            # serialise faithfully. Fail rather than emit an unconstrained CSV
+            # that would be presented to the athlete as a programmed workout.
+            logger.info("generate: no usable prescription; aborting before serialisation")
+            return GenerationResult(
+                success=False,
+                errors=[
+                    "The prescription step returned no workout decision (empty or "
+                    "unparseable JSON). No CSV was generated.",
+                ],
+                message="Generation failed: the training decision could not be "
+                        "determined. No file was saved; programme state is unchanged.",
+            )
 
         max_retries = self._settings.strong_generation.max_validation_retries
         errors: list[str] = []
@@ -187,7 +203,13 @@ class StrongGenerationService:
         programme = self._programmes.get(programme_id)
         if programme is None or not programme.generated_folder:
             raise ValueError(f"No generated folder configured for programme {programme_id}")
-        errors = validate_strong_csv(csv_content, self._schema(programme))
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date or ""):
+            raise ValueError(
+                f"Refusing to save with a malformed date {date!r}: expected YYYY-MM-DD."
+            )
+        errors = validate_strong_csv(
+            csv_content, self._schema(programme), expected_date=date
+        )
         if errors:
             raise ValueError(
                 "Refusing to save an invalid Strong CSV: " + "; ".join(errors)
@@ -535,9 +557,15 @@ class StrongGenerationService:
         )
         try:
             data = json.loads(response.content)
-            return data.get("errors", [])
         except json.JSONDecodeError:
-            return []
+            # An unparseable verdict is not approval. Treating it as "no errors"
+            # would let a broken validator silently bless any CSV, the opposite
+            # of a gate.
+            return [
+                "Semantic validation returned unparseable JSON, so the workout "
+                "could not be approved. Return a JSON object with an 'errors' list.",
+            ]
+        return data.get("errors", [])
 
     def _extract_csv(self, content: str) -> str | None:
         match = _FENCE_RE.search(content)

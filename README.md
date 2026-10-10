@@ -113,6 +113,17 @@ PYTHONPATH=src .venv/bin/uvicorn "app.api:create_app" --factory --port 8000
 
 Logs go to stdout and to `pt.log`, including per-call token usage and cost.
 
+### Exposure and authentication
+
+The service has **no authentication** and, by default, binds `0.0.0.0:8000`.
+Anyone who can reach the port can spend your `OPENROUTER_API_KEY` and, through
+the tool loop, read and write your entire Google Drive (the OAuth token carries
+full Drive scope). Bind it to localhost with `PT_HOST=127.0.0.1` when nothing
+else needs to reach it, and put it behind an authenticating reverse proxy before
+exposing it on a network. The default stays open because the bundled
+`start-services.sh` runs Open WebUI in Docker, which reaches the host over the
+Docker bridge.
+
 ### Open WebUI
 
 In Open WebUI, add an OpenAI-compatible API connection pointing at
@@ -152,8 +163,9 @@ Set up Drive once:
    ```
 3. In Drive, create a folder named `Personal Trainer` and copy its ID from
    the address bar (`.../folders/<FOLDER_ID>`) into `storage.root_folder_id`.
-4. Point `storage.oauth_token_file` at the token file and set
-   `storage.backend: drive`.
+4. Confirm `storage.backend: drive` and point `storage.oauth_token_file` at
+   the token file. (The `root_folder_id` committed in `config/config.yaml` is
+   the maintainer's — replace it with your own from step 3.)
 5. If you have an existing local `data/` mirror to upload, seed Drive from it
    (idempotent — safe to re-run). A fresh clone has no local `data/`: the live
    files already live in Drive, and the test suite uses `tests/fixtures/`.
@@ -417,7 +429,7 @@ lifting exercises, the session file reflects the app's name, not its contents.)
 .venv/bin/python -m pytest tests/ -q
 ```
 
-194 tests. They run entirely against committed fixtures under `tests/fixtures/`:
+The suite runs entirely against committed fixtures under `tests/fixtures/`:
 the `data_dir` fixture copies `tests/fixtures/data` per test, giving a synthetic
 Concept2 export, the J&T reference document, the day templates and a fixed
 baseline training state. No test reads the repo-root `data/` mirror or Google
@@ -432,6 +444,11 @@ Worth knowing about two of them:
 - The `data_dir` fixture copies `tests/fixtures/data` (never the repo-root
   `data/` or Drive), and the session timestamp is pinned globally. Without those
   the wall clock would leak into the suite and cause spurious failures.
+
+Some tests still read the shipped `config/programmes.yaml` and
+`config/equipment.yaml`: those are application configuration (the programme
+registry and the athlete's kit), not personal training data, and asserting the
+shipped files parse is deliberate.
 
 ## Repository layout
 
@@ -448,7 +465,6 @@ data/                      local scratch mirror of the live Drive root (gitignor
   sessions/*.yaml          condensed session records, written by the LLM (the history)
   state/training_state.yaml
   generated/strong/*.csv   validated output, ready to import
-docs/prompt.md             prompt reference
 logs/
 src/
   app/

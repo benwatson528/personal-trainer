@@ -167,7 +167,7 @@ def _gcd(values: list[Fraction]) -> Fraction:
     return Fraction(result, denominator) or Fraction(1)
 
 
-def _resolve(header: list[str], schema: StrongSchema | None, name: str) -> int | None:
+def resolve_column(header: list[str], schema: StrongSchema | None, name: str) -> int | None:
     """Index of a column in this file, preferring the derived schema's position.
 
     The name is only used to match against columns the schema already found in
@@ -214,9 +214,9 @@ def validate_equipment(
         return []
 
     header = [h.strip() for h in rows[0]]
-    exercise_col = _resolve(header, schema, "Exercise")
-    set_col = _resolve(header, schema, "Set")
-    weight_col = _resolve(header, schema, "Weight (kg)")
+    exercise_col = resolve_column(header, schema, "Exercise")
+    set_col = resolve_column(header, schema, "Set")
+    weight_col = resolve_column(header, schema, "Weight (kg)")
     if exercise_col is None or set_col is None or weight_col is None:
         return []
 

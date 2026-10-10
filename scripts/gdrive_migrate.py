@@ -26,9 +26,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def main() -> None:
     settings = load_settings()
-    if settings.storage.backend != "drive":
+    if settings.storage.backend not in ("gdrive", "drive"):
         sys.exit(
-            "config/config.yaml must set storage.backend: drive before "
+            "config/config.yaml must set storage.backend: gdrive before "
             "migrating (nothing would change otherwise)."
         )
 

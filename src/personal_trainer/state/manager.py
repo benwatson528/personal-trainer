@@ -7,8 +7,6 @@ edited by hand behind the PT's back.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import yaml
 
 from ..models import TrainingState, WorkoutRef
@@ -72,12 +70,3 @@ class StateManager:
             state.memory.preferences.append(preference)
             self.save(state)
         return state
-
-    def touch(self) -> None:
-        """Ensure the state file exists on first run."""
-        if not self._storage.exists(self._path):
-            self.save(TrainingState())
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()

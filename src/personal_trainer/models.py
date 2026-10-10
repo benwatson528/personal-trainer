@@ -95,16 +95,6 @@ class Programme(BaseModel):
     templates_folder: str | None = None
 
 
-class SessionDecision(BaseModel):
-    """A session recommendation or override (spec section 17)."""
-
-    pt_recommendation: str  # programme id
-    reasoning: str
-    alternatives: list[str] = Field(default_factory=list)
-    user_preference: str | None = None
-    final_session: str | None = None
-
-
 class ReconciliationResult(BaseModel):
     """Outcome of post-workout state reconciliation (spec section 28)."""
 

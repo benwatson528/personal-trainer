@@ -1,5 +1,8 @@
 # Programme registry. Adding a programme = adding a reference document in
 # Drive plus an entry here. No core code changes required (spec section 11/42).
+#
+# This is a test fixture: the live copy lives in the storage root at
+# config/programmes.yaml (see config/config.yaml: folders.programmes_config).
 
 programmes:
   - id: jnt_2
@@ -8,7 +11,7 @@ programmes:
     reference: "programmes/J&T 2.0/reference.md"
     # Upload landing spot for a completed Strong CSV. Not kept as history:
     # `summarise_session` condenses it into sessions/*.yaml, which is the
-    # lifting history, and the Strong format comes from the day templates below.
+    # lifting history; generation reads those, not the raw export.
     history_file: "history/strong/strong_history.csv"
     generated_folder: "generated/strong"
     # One fill-in template per session day (day_1.csv .. day_4.csv): the day's

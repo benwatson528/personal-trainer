@@ -1,8 +1,9 @@
 """Equipment the user owns, used to pick loadable weights.
 
-Kept in its own file (`config/equipment.yaml`) because it is a per-athlete
-inventory that changes independently of the app settings: you gain or lose a
-pair of dumbbells and edit one list, with no code change.
+Kept as its own content-config file (`config/equipment.yaml` in the storage
+root — i.e. Drive) because it is a per-athlete inventory that changes
+independently of the app settings: you gain or lose a pair of dumbbells and edit
+one list, with no code change.
 
 The inventory is presented to the LLM as context only. Python never decides
 what weight to prescribe — that judgement, including how to improvise when an
@@ -11,11 +12,18 @@ exact weight is unreachable, stays with the model.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from .storage.base import StorageBackend
+
+logger = logging.getLogger("personal_trainer.equipment")
 
 DEFAULT_PATH = "config/equipment.yaml"
 
@@ -114,35 +122,78 @@ def _fmt(value: float) -> str:
     return f"{value:g}"
 
 
+def parse_equipment(text: str, source: str = "equipment config") -> Equipment:
+    """Parse the inventory from YAML text. Bad values degrade to empty + warning.
+
+    A syntactically valid blob with a bad value (``dumbbells: [ten]``) degrades
+    to "no enforcement" with a warning rather than crashing generation: this is
+    the one file the athlete edits by hand, so a typo must not take down the
+    lifting path.
+    """
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        logger.warning("Equipment config %s is not valid YAML (%s); ignoring it.", source, exc)
+        return Equipment()
+
+    if not isinstance(data, dict):
+        logger.warning("Equipment config %s is not a mapping; ignoring it.", source)
+        return Equipment()
+
+    try:
+        bars = data.get("bars") or {}
+        bars = (
+            {str(k): float(v) for k, v in bars.items()}
+            if isinstance(bars, dict)
+            else {}
+        )
+
+        plates = []
+        for entry in data.get("plates") or []:
+            if isinstance(entry, dict) and "weight" in entry:
+                plates.append(
+                    Plate(weight=float(entry["weight"]), count=int(entry.get("count", 2)))
+                )
+            elif isinstance(entry, (int, float)):
+                plates.append(Plate(weight=float(entry)))
+        plates.sort(key=lambda p: p.weight, reverse=True)
+
+        dumbbells = [float(d) for d in (data.get("dumbbells") or [])]
+        other = [str(o) for o in (data.get("other") or [])]
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "Equipment config %s has a non-numeric value (%s); ignoring it so "
+            "generation falls back to no equipment enforcement.",
+            source,
+            exc,
+        )
+        return Equipment()
+
+    return Equipment(bars=bars, plates=plates, dumbbells=dumbbells, other=other)
+
+
 def load_equipment(path: str | Path | None = None) -> Equipment:
-    """Read the equipment inventory. Missing or unreadable file -> empty."""
+    """Read the inventory from a local file. Missing or unreadable -> empty.
+
+    Kept for direct path use (tests, scripts, local development). The app loads
+    through the storage backend with `load_equipment_from_storage`, so the
+    inventory can live in Drive.
+    """
     if path is None:
         path = os.environ.get("PT_EQUIPMENT_CONFIG", DEFAULT_PATH)
     p = Path(path)
     if not p.exists():
         return Equipment()
-    try:
-        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError:
+    return parse_equipment(p.read_text(encoding="utf-8"), source=str(p))
+
+
+def load_equipment_from_storage(storage: StorageBackend, path: str) -> Equipment:
+    """Read the inventory through the storage backend (Drive or local)."""
+    if not storage.exists(path):
+        logger.warning(
+            "No equipment inventory at %s; generation will not enforce weights. "
+            "Upload config/equipment.yaml to the storage root.",
+            path,
+        )
         return Equipment()
-
-    if not isinstance(data, dict):
-        return Equipment()
-
-    bars = data.get("bars") or {}
-    bars = {str(k): float(v) for k, v in bars.items()} if isinstance(bars, dict) else {}
-
-    plates = []
-    for entry in data.get("plates") or []:
-        if isinstance(entry, dict) and "weight" in entry:
-            plates.append(Plate(weight=float(entry["weight"]),
-                                count=int(entry.get("count", 2))))
-        elif isinstance(entry, (int, float)):
-            plates.append(Plate(weight=float(entry)))
-    plates.sort(key=lambda p: p.weight, reverse=True)
-
-    dumbbells = [float(d) for d in (data.get("dumbbells") or [])]
-
-    other = [str(o) for o in (data.get("other") or [])]
-
-    return Equipment(bars=bars, plates=plates, dumbbells=dumbbells, other=other)
+    return parse_equipment(storage.read(path), source=path)

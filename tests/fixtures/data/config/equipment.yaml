@@ -1,0 +1,42 @@
+# Equipment inventory — test fixture.
+#
+# The live copy lives in the storage root at config/equipment.yaml (see
+# config/config.yaml: folders.equipment_config). The app used to read it from
+# the repo's config/ directory; it now travels with the training data.
+#
+# All weights are in kg.
+
+bars:
+  barbell: 20
+  ez_bar: 8
+
+plates:
+  - {weight: 25, count: 2}
+  - {weight: 20, count: 4}
+  - {weight: 15, count: 2}
+  - {weight: 10, count: 4}
+  - {weight: 5, count: 4}
+  - {weight: 2.5, count: 4}
+  - {weight: 1.25, count: 4}
+  - {weight: 0.5, count: 2}
+
+dumbbells:
+  - 40
+  - 30
+  - 27.5
+  - 25
+  - 22.5
+  - 20
+  - 17.5
+  - 15
+  - 10
+  - 7.5
+  - 5
+  - 2.5
+
+other:
+  - "Adjustable bench, flat and incline"
+  - "Squat rack"
+  - "Pull-up bar"
+  - "Concept2 rower"
+  - "Resistance bands"

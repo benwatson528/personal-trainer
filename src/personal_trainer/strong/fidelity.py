@@ -26,7 +26,7 @@ from __future__ import annotations
 import csv
 import io
 
-from .equipment_rules import _resolve, is_warmup
+from .equipment_rules import resolve_column, is_warmup
 from .schema import StrongSchema
 
 
@@ -57,8 +57,8 @@ def validate_prescription_fidelity(
         return []
 
     header = [h.strip() for h in rows[0]]
-    exercise_col = _resolve(header, schema, "Exercise")
-    set_col = _resolve(header, schema, "Set")
+    exercise_col = resolve_column(header, schema, "Exercise")
+    set_col = resolve_column(header, schema, "Set")
     if exercise_col is None or set_col is None:
         return []
 

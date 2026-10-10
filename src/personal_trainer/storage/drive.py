@@ -57,14 +57,21 @@ def _build_credentials(config: StorageConfig):
 
 class GoogleDriveStorageBackend:
     def __init__(self, config: StorageConfig):
-        if not config.root_folder_id:
-            raise ValueError("storage.root_folder_id is required for the drive backend")
+        # The folder id comes from the environment so the committed config.yaml
+        # never carries a real Drive id. config.yaml is only a local-dev fallback.
+        root_folder_id = os.environ.get("GDRIVE_ROOT_FOLDER_ID") or config.root_folder_id
+        if not root_folder_id:
+            raise ValueError(
+                "storage.root_folder_id is required for the gdrive backend: set "
+                "the GDRIVE_ROOT_FOLDER_ID environment variable (or "
+                "storage.root_folder_id in config.yaml for local development)."
+            )
 
         from googleapiclient.discovery import build
 
         creds = _build_credentials(config)
         self._service = build("drive", "v3", credentials=creds)
-        self._root_folder_id = config.root_folder_id
+        self._root_folder_id = root_folder_id
         self._index: dict[str, str] = {}  # logical path -> file id
         self._folders: set[str] = set()  # logical paths that are folders
         self._build_index()

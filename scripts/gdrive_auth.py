@@ -11,24 +11,24 @@ Before running this you need an OAuth client:
      name (`Personal Trainer`) + your email → Save. (App is in "Testing"
      mode; that's fine — you're the only user.)
   3. "Credentials" → "Create credentials" → "OAuth client ID" → type
-     **Desktop app** → download the JSON, e.g. to `config/gdrive_client_secret.json`.
+     **Desktop app** → download the JSON, e.g. to `secrets/gdrive_client_secret.json`.
 
 Then run one of:
 
   # Same machine with a browser (opens the login page for you):
   PYTHONPATH=src .venv/bin/python scripts/gdrive_auth.py \
-      --client-secrets config/gdrive_client_secret.json \
-      --token config/gdrive_token.json
+      --client-secrets secrets/gdrive_client_secret.json \
+      --token secrets/gdrive_token.json
 
   # Headless / browser elsewhere (two steps, copy the URL into any browser):
   PYTHONPATH=src .venv/bin/python scripts/gdrive_auth.py \
-      --client-secrets config/gdrive_client_secret.json \
+      --client-secrets secrets/gdrive_client_secret.json \
       --print --state /tmp/opencode/gdrive-flow.json
   # ... open the printed URL, consent, then paste the redirected URL back:
   PYTHONPATH=src .venv/bin/python scripts/gdrive_auth.py \
-      --client-secrets config/gdrive_client_secret.json \
+      --client-secrets secrets/gdrive_client_secret.json \
       --finish --state /tmp/opencode/gdrive-flow.json \
-      --code '<pasted URL or code>' --token config/gdrive_token.json
+      --code '<pasted URL or code>' --token secrets/gdrive_token.json
 
 The script writes a refresh token to --token; the backend then uses it.
 Never commit the client secret or the token file.
@@ -61,21 +61,21 @@ def _write_token(creds, path: str) -> None:
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(creds.to_json())
     print(f"\nDone. Token written to {path}.")
-    print("config/config.yaml already points storage.oauth_token_file at this file "
-          "once storage.backend: drive is set.")
+    print("config/config.yaml points storage.oauth_token_file at this file; "
+          "it is used once storage.backend: gdrive is set.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Authorise the PT backend for Google Drive")
     parser.add_argument(
         "--client-secrets",
-        default=os.environ.get("PT_GOOGLE_CLIENT_SECRETS"),
+        default=os.environ.get("PT_GOOGLE_CLIENT_SECRETS", "secrets/gdrive_client_secret.json"),
         help="Path to the OAuth client JSON (or PT_GOOGLE_CLIENT_SECRETS).",
     )
     parser.add_argument(
         "--token",
-        default=os.environ.get("PT_GOOGLE_OAUTH_TOKEN", "config/gdrive_token.json"),
-        help="Where to write the token file (default: config/gdrive_token.json).",
+        default=os.environ.get("PT_GOOGLE_OAUTH_TOKEN", "secrets/gdrive_token.json"),
+        help="Where to write the token file (default: secrets/gdrive_token.json).",
     )
     parser.add_argument(
         "--print",

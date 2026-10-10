@@ -78,11 +78,12 @@ def _token_file(tmp_path):
 
 
 def _backend(tmp_path, monkeypatch):
+    monkeypatch.setenv("GDRIVE_ROOT_FOLDER_ID", "root")
     monkeypatch.setattr(
         "googleapiclient.discovery.build", lambda *a, **k: _FakeDrive()
     )
     return drive_mod.GoogleDriveStorageBackend(
-        StorageConfig(root_folder_id="root", oauth_token_file=_token_file(tmp_path))
+        StorageConfig(oauth_token_file=_token_file(tmp_path))
     )
 
 

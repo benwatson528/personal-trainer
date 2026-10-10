@@ -1,12 +1,10 @@
 """Decisions, overrides and post-workout reconciliation (spec sections 17, 28, 29)."""
 
-from pathlib import Path
+from conftest import DATA_DIR
 
 from personal_trainer.models import Programme, WorkoutRef
 from personal_trainer.programmes.manager import ProgrammeManager
 from personal_trainer.pt.decisions import reconcile_completion
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Reconciliation only reads the Date and Workout columns, so this stands in for
 # the (no longer kept) Strong export. Newest workout: Rowing A on 2026-09-01.
@@ -115,7 +113,7 @@ def test_reconcile_concept2(state_manager, storage):
 
 
 def test_programme_manager_resolves_active(state_manager):
-    pm = ProgrammeManager(PROJECT_ROOT / "config" / "programmes.yaml")
+    pm = ProgrammeManager.from_file(DATA_DIR / "config" / "programmes.yaml")
     active = pm.resolve_active(state_manager.load())
     assert {p.id for p in active} == {"jnt_2", "pete_plan_beginner"}
     assert [p.id for p in pm.by_modality("lifting")] == ["jnt_2"]

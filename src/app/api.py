@@ -6,10 +6,8 @@ as its backend. Open WebUI remains the UI; all training logic lives here.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -31,21 +29,26 @@ from personal_trainer.storage.local import LocalStorageBackend
 
 from .chat import PersonalTrainer
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     # --- storage backend (spec section 6) --------------------------------
-    if settings.storage.backend == "drive":
+    if settings.storage.backend in ("gdrive", "drive"):
         storage = GoogleDriveStorageBackend(settings.storage)
     else:
         storage = LocalStorageBackend(settings.storage.root)
 
-    programme_manager = ProgrammeManager(
-        os.environ.get("PT_PROGRAMMES_CONFIG", str(PROJECT_ROOT / "config" / "programmes.yaml"))
-    )
+    # Programmes are content config, read from the storage root (Drive) so the
+    # repo carries none of it. PT_PROGRAMMES_CONFIG points at a local file for
+    # development and tests.
+    override = os.environ.get("PT_PROGRAMMES_CONFIG")
+    if override:
+        programme_manager = ProgrammeManager.from_file(override)
+    else:
+        programme_manager = ProgrammeManager.from_storage(
+            storage, settings.folders.programmes_config
+        )
     llm = OpenRouterClient(settings.llm)
     pt = PersonalTrainer(settings, storage, llm, programme_manager)
 
@@ -95,7 +98,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    # Bind is configurable so the service can be locked to localhost. It defaults
+    # to all interfaces because the bundled Open WebUI runs in Docker and reaches
+    # the host over the bridge; there is no auth on the API, so anything that can
+    # reach this port can drive the LLM and the athlete's Drive. Set
+    # PT_HOST=127.0.0.1 when something else (a reverse proxy) fronts it.
+    host = os.environ.get("PT_HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
+    logging.getLogger("personal_trainer").info("Serving on %s:%s", host, port)
+    uvicorn.run(create_app(), host=host, port=port)
 
 
 if __name__ == "__main__":

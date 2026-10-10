@@ -50,6 +50,7 @@ def validate_strong_csv(
     candidate: str,
     schema: StrongSchema,
     expected_timestamp: str | None = None,
+    expected_date: str | None = None,
 ) -> list[str]:
     """Validate a candidate Strong CSV against the derived schema.
 
@@ -60,6 +61,11 @@ def validate_strong_csv(
     row's date field must equal it exactly. Without this the LLM copies a date
     out of the history sample, stamping planned workouts in the past, and
     invents its own time of day.
+
+    expected_date (YYYY-MM-DD) is the weaker check used by save(), which knows
+    the day a workout belongs to but not the exact time the generator stamped.
+    Every row's date must start with it, so a saved file can never carry a
+    different day from its own filename and pending record.
     """
     errors: list[str] = []
     if not candidate.strip():
@@ -126,6 +132,14 @@ def validate_strong_csv(
                     f"Row {line_offset}: Date must be exactly '{expected_timestamp}', "
                     f"got '{actual}'. Use the session timestamp verbatim, not a date "
                     f"from the history sample and not an invented time."
+                )
+        elif expected_date:
+            date_col = _date_column(schema, headers)
+            actual = record.get(date_col, "") if date_col else ""
+            if not actual.startswith(expected_date):
+                errors.append(
+                    f"Row {line_offset}: Date must be on '{expected_date}', got "
+                    f"'{actual}'. The file's date must match the workout it records."
                 )
         # Empty cells mean "not populated" — treat as None for optional columns.
         for col in schema.columns:

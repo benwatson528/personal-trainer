@@ -9,10 +9,9 @@ logs/
 pt.log
 TODO
 
-# Secrets — never commit.
-# Google Drive OAuth credentials and token.
-config/gdrive_client_secret.json
-config/gdrive_token.json
+# Secrets — never commit. The Google Drive OAuth client and token live here,
+# kept separate from the non-secret content-config (which now lives in Drive).
+secrets/
 
 # Local data/ is a scratch mirror of the live Google Drive contents (state,
 # sessions, history, generated output and programme material). Nothing in it is

@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import DATA_DIR
 
 from personal_trainer.equipment import Equipment, Plate, load_equipment
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
@@ -24,9 +23,9 @@ def inventory_path(tmp_path: Path) -> Path:
     return p
 
 
-def test_loads_the_real_config_file():
-    """The shipped inventory must parse — it is what the athlete edits."""
-    equipment = load_equipment(PROJECT_ROOT / "config" / "equipment.yaml")
+def test_loads_the_shipped_inventory():
+    """The committed fixture inventory must parse — it is the shape the athlete edits."""
+    equipment = load_equipment(DATA_DIR / "config" / "equipment.yaml")
     assert not equipment.is_empty
     assert equipment.bars["barbell"] == 20
     assert equipment.dumbbells, "no dumbbells listed"
@@ -75,6 +74,15 @@ def test_malformed_file_does_not_crash(tmp_path: Path):
     p = tmp_path / "equipment.yaml"
     p.write_text("plates: [unclosed\n")
     assert load_equipment(p).is_empty
+
+
+def test_non_numeric_values_degrade_to_empty_not_crash(tmp_path: Path):
+    """A hand-edit typo (`barbell: heavy`, `dumbbells: [ten]`) must fall back to
+    no enforcement rather than take down the whole lifting path."""
+    p = tmp_path / "equipment.yaml"
+    p.write_text("bars:\n  barbell: heavy\ndumbbells: [ten]\n")
+    equipment = load_equipment(p)
+    assert equipment.is_empty
 
 
 def test_describe_gives_the_model_the_actual_constraint(inventory_path: Path):
