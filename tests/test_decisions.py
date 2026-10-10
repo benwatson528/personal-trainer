@@ -6,19 +6,17 @@ from personal_trainer.models import Programme, WorkoutRef
 from personal_trainer.programmes.manager import ProgrammeManager
 from personal_trainer.pt.decisions import reconcile_completion
 
-# Reconciliation only reads the Date and Workout columns, so this stands in for
-# the (no longer kept) Strong export. Newest workout: Rowing A on 2026-09-01.
+# Reconciliation only reads the Date and Workout columns.
 HISTORY = (
     "Date,Workout\n"
     "2026-06-22 18:00:00,J&T 2.0 - 3\n"
     "2026-06-23 18:00:00,J&T 2.0 - 4\n"
-    "2026-09-01 16:39:41,Rowing A\n"
 )
 
 
 def lifting_programme():
     return Programme(
-        id="jnt_2", name="J&T 2.0", modality="lifting",
+        id="jnt_2", name="J&T 2.0",
         history_file="history/strong/strong_history.csv",
     )
 
@@ -53,8 +51,8 @@ def test_reconcile_does_not_advance_without_expected_workout(state_manager):
         lifting_programme(), state_manager.load(), HISTORY
     )
     assert result.status == "mismatch"
-    # The newest workout in the history is a Rowing A conditioning day.
-    assert result.found_label == "Rowing A"
+    # The newest workout in the history is J&T 2.0 - 4, not the pending one.
+    assert result.found_label == "J&T 2.0 - 4"
     assert "haven't advanced" in result.message
     # State must be unchanged.
     assert state_manager.get_programme_state("jnt_2").latest_confirmed_workout.label == "J&T 2.0 - 4"
@@ -69,15 +67,15 @@ def test_reconcile_confirms_newer_workout_without_pending(state_manager):
         lifting_programme(), state_manager.load(), HISTORY
     )
     assert result.status == "confirmed"
-    # Newest workout in the history is the 2026-09-01 Rowing A day.
-    assert result.found_label == "Rowing A"
-    assert result.found_date == "2026-09-01"
+    # Newest workout in the history is 2026-06-23 J&T 2.0 - 4.
+    assert result.found_label == "J&T 2.0 - 4"
+    assert result.found_date == "2026-06-23"
 
 
 def test_reconcile_nothing_new_when_history_unchanged(state_manager):
     # Confirm the actual newest workout, so a second pass finds nothing new.
     state_manager.update_latest_confirmed(
-        "jnt_2", WorkoutRef(id="2026-09-01:Rowing A", date="2026-09-01", label="Rowing A")
+        "jnt_2", WorkoutRef(id="2026-06-23:J&T 2.0 - 4", date="2026-06-23", label="J&T 2.0 - 4")
     )
     result = reconcile_completion(
         lifting_programme(), state_manager.load(), HISTORY
@@ -88,7 +86,7 @@ def test_reconcile_nothing_new_when_history_unchanged(state_manager):
 
 def test_reconcile_handles_missing_history(state_manager):
     programme = Programme(
-        id="jnt_2", name="J&T 2.0", modality="lifting",
+        id="jnt_2", name="J&T 2.0",
         history_file="history/strong/missing.csv",
     )
     result = reconcile_completion(programme, state_manager.load(), None)
@@ -96,27 +94,10 @@ def test_reconcile_handles_missing_history(state_manager):
     assert "export" in result.message.lower()
 
 
-def test_reconcile_concept2(state_manager, storage):
-    programme = Programme(
-        id="pete_plan_beginner", name="Beginner Pete Plan", modality="rowing",
-        history_file="history/concept2/concept2_history.csv",
-    )
-    # Seed last confirmed as an older row so the newest is newly completed.
-    state_manager.update_latest_confirmed(
-        "pete_plan_beginner",
-        WorkoutRef(id="2026-09-22:15:00 row", date="2026-09-22", label="15:00 row"),
-    )
-    result = reconcile_completion(programme, state_manager.load(), storage.read(programme.history_file))
-    assert result.status == "confirmed"
-    assert result.found_label == "15:00 row"
-    assert result.found_date == "2026-09-25"
-
-
 def test_programme_manager_resolves_active(state_manager):
     pm = ProgrammeManager.from_file(DATA_DIR / "config" / "programmes.yaml")
     active = pm.resolve_active(state_manager.load())
-    assert {p.id for p in active} == {"jnt_2", "pete_plan_beginner"}
-    assert [p.id for p in pm.by_modality("lifting")] == ["jnt_2"]
+    assert {p.id for p in active} == {"jnt_2"}
 
 
 def test_programme_manager_marks_inactive(state_manager, programme_manager):
@@ -124,4 +105,4 @@ def test_programme_manager_marks_inactive(state_manager, programme_manager):
     state.programmes["jnt_2"].active = False
     state_manager.save(state)
     active = programme_manager.resolve_active(state_manager.load())
-    assert [p.id for p in active] == ["pete_plan_beginner"]
+    assert [p.id for p in active] == []

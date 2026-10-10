@@ -21,7 +21,7 @@ def test_read_programme_includes_reference(executor):
     result = executor.execute("read_programme", {"programme_id": "jnt_2"})
     assert result["ok"]
     assert "T1" in result["reference"]  # real J&T reference content
-    assert result["programme"]["modality"] == "lifting"
+    assert "modality" not in result["programme"]
 
 
 def test_read_history_returns_condensed_sessions(executor, storage):
@@ -44,13 +44,6 @@ def test_read_reference_jt(executor):
     result = executor.execute("read_reference", {"programme_id": "jnt_2"})
     assert result["ok"]
     assert "T1" in result["reference"]
-
-
-def test_read_reference_pete_plan(executor):
-    result = executor.execute("read_reference", {"programme_id": "pete_plan_beginner"})
-    assert result["ok"]
-    assert "24 week" in result["reference"]
-    assert "5000m" in result["reference"]
     # Blog comments trimmed.
     assert "Responses to" not in result["reference"]
 
@@ -302,24 +295,24 @@ def test_set_programme_position_clears_stale_pending(executor):
 
 
 def test_set_programme_position_out_of_cycle_does_not_advance(executor):
-    """Off-plan work (easy row after illness) must not move the pointer."""
+    """Off-plan work (easy extra session after illness) must not move the pointer."""
     executor.execute("update_state", {
-        "programme_id": "pete_plan_beginner",
+        "programme_id": "jnt_2",
         "confirmed_workout": {
-            "id": "2026-09-25:15:00 row", "date": "2026-09-25", "label": "15:00 row",
+            "id": "2026-09-25:extra", "date": "2026-09-25", "label": "Extra session",
             "programme_position": {"week": 8, "session": "optional_day_4"},
         },
     })
-    before = executor.execute("read_state", {})["state"]["programmes"]["pete_plan_beginner"]
+    before = executor.execute("read_state", {})["state"]["programmes"]["jnt_2"]
 
     result = executor.execute("set_programme_position", {
-        "programme_id": "pete_plan_beginner", "out_of_cycle": True,
+        "programme_id": "jnt_2", "out_of_cycle": True,
         "description": "20min easy row after being ill",
     })
     assert result["ok"]
     assert result["changed"] is False
     assert result["reason"] == "out_of_cycle"
-    after = executor.execute("read_state", {})["state"]["programmes"]["pete_plan_beginner"]
+    after = executor.execute("read_state", {})["state"]["programmes"]["jnt_2"]
     assert (after["latest_confirmed_workout"]["programme_position"]
             == before["latest_confirmed_workout"]["programme_position"])
 
@@ -538,31 +531,10 @@ def test_summarise_session_sends_a_bounded_row_window(executor, stub_llm, settin
     assert len(rows) > 20, "must still cover at least one whole session"
 
 
-# --- modality gates history -------------------------------------------------
+# --- recommend_session ----------------------------------------------------
 
-def test_recommend_rowing_does_not_send_lifting_history(executor):
-    """The lifting export holds rowing sessions among the lifting ones, so
-    dumping it on a rowing request is not just wasteful — it invites the model
-    to plan the wrong session."""
-    result = executor.execute("recommend_session", {
-        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
-    })
-    assert result["ok"]
-    assert result.get("recent_history_md") is None
-    assert "not what you are planning" in result["note"]
-
-
-def test_recommend_rowing_does_not_trigger_generation(executor, stub_llm):
-    executor.execute("recommend_session", {
-        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
-    })
-    assert stub_llm.calls == [], "a rowing request must not spend LLM calls"
-
-
-def test_recommend_lifting_sends_only_lifting_history(executor, stub_llm, storage):
-    """Gating must not cost the lifting path the context it relies on for weights
-    and advice — and must not hand it the rowing history that the fixture also
-    holds."""
+def test_recommend_sends_lifting_history(executor, stub_llm, storage):
+    """The lifting path gets its condensed session history for weight selection."""
     from personal_trainer.sessions import SessionSummaries
     from test_strong_generation import (
         VALID_CSV, prescription_response, validation_response,
@@ -576,21 +548,16 @@ def test_recommend_lifting_sends_only_lifting_history(executor, stub_llm, storag
         make_llm_response("```csv\n" + VALID_CSV + "```"),
         validation_response(),
     ]
-    result = executor.execute("recommend_session", {
-        "programme_id": "jnt_2", "recommended_modality": "lifting",
-    })
-    assert result["recommended_modality"] == "lifting"
+    result = executor.execute("recommend_session", {"programme_id": "jnt_2"})
     history = result["recent_history_md"]
     assert history, "lifting must still get its history"
-    # Only the lifting programme's history, keyed by its id. A rowing entry here
-    # would be the leak this whole gate exists to prevent.
     assert set(history) == {"jnt_2"}, history
     assert "Squat (Barbell): ['100x5']" in history["jnt_2"]
     assert "cite actual recent sessions" in result["note"]
 
 
-def test_recommend_lifting_without_lifting_history_sends_none(executor, stub_llm):
-    """No lifting history yet: the rowing file must not be substituted for it."""
+def test_recommend_without_lifting_history_sends_none(executor, stub_llm):
+    """No lifting history yet: recent_history_md is None."""
     from test_strong_generation import (
         VALID_CSV, prescription_response, validation_response,
     )
@@ -600,15 +567,6 @@ def test_recommend_lifting_without_lifting_history_sends_none(executor, stub_llm
         make_llm_response("```csv\n" + VALID_CSV + "```"),
         validation_response(),
     ]
-    result = executor.execute("recommend_session", {
-        "programme_id": "jnt_2", "recommended_modality": "lifting",
-    })
+    result = executor.execute("recommend_session", {"programme_id": "jnt_2"})
     assert result["recent_history_md"] is None
     assert "not what you are planning" in result["note"]
-
-
-def test_recommend_echoes_the_modality_it_acted_on(executor):
-    result = executor.execute("recommend_session", {
-        "programme_id": "pete_plan_beginner", "recommended_modality": "rowing",
-    })
-    assert result["recommended_modality"] == "rowing"

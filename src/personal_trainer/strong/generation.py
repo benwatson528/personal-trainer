@@ -86,11 +86,6 @@ class StrongGenerationService:
         programme = self._programmes.get(programme_id)
         if programme is None:
             return GenerationResult(success=False, errors=[f"Unknown programme: {programme_id}"])
-        if programme.modality != "lifting":
-            return GenerationResult(
-                success=False,
-                errors=[f"Programme {programme_id} is not a lifting programme; no Strong CSV needed."],
-            )
 
         equipment = load_equipment_from_storage(
             self._storage, self._settings.folders.equipment_config

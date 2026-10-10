@@ -53,9 +53,6 @@ class ProgrammeManager:
     def all(self) -> list[Programme]:
         return list(self._programmes.values())
 
-    def by_modality(self, modality: str) -> list[Programme]:
-        return [p for p in self.all() if p.modality == modality]
-
     def resolve_active(self, state: TrainingState) -> list[Programme]:
         """Active programmes = registered AND not marked inactive in state."""
         active = []

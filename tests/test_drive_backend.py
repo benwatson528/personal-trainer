@@ -133,11 +133,11 @@ def test_write_at_root_creates_single_folder(tmp_path, monkeypatch):
 
 def test_write_existing_file_updates_in_place(tmp_path, monkeypatch):
     backend = _backend(tmp_path, monkeypatch)
-    backend.write("sessions/2026-09-01_rowing_a.yaml", "one: 1\n")
-    backend.write("sessions/2026-09-01_rowing_a.yaml", "one: 2\n")
+    backend.write("sessions/2026-06-23_jnt2.yaml", "one: 1\n")
+    backend.write("sessions/2026-06-23_jnt2.yaml", "one: 2\n")
 
     assert backend._service.updates == [
-        {"name": "2026-09-01_rowing_a.yaml"}
+        {"name": "2026-06-23_jnt2.yaml"}
     ]
     # only one file create, then an update
     file_creates = [c for c in backend._service.creates

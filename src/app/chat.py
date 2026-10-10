@@ -185,7 +185,7 @@ class PersonalTrainer:
         programmes = []
         for p in active:
             cached = state.programmes.get(p.id)
-            entry = f"{p.name} ({p.modality})"
+            entry = f"{p.name}"
             if cached and cached.latest_confirmed_workout:
                 ref = cached.latest_confirmed_workout
                 pos = ref.programme_position

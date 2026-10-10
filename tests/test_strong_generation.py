@@ -275,13 +275,6 @@ def test_semantic_validator_unparseable_json_is_an_error(strong_service, stub_ll
     assert errors
 
 
-def test_rowing_programme_needs_no_strong_csv(strong_service, stub_llm):
-    result = strong_service.generate("pete_plan_beginner")
-    assert not result.success
-    assert any("not a lifting programme" in e for e in result.errors)
-    assert stub_llm.calls == []  # no LLM calls made
-
-
 # --- Stage 2 validation must be able to reach a stable verdict -------------
 #
 # Without an approval standard the validator had no fixed point: it rejected the

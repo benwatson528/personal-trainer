@@ -9,10 +9,6 @@ def test_load_existing_state(state_manager):
     assert "jnt_2" in state.programmes
     # jnt_2 confirmed workout cleared — new cycle starting
     assert state.programmes["jnt_2"].latest_confirmed_workout is None
-    # pete plan tracks programme position
-    pete = state.programmes["pete_plan_beginner"]
-    assert pete.latest_confirmed_workout.programme_position.week == 8
-    assert pete.latest_confirmed_workout.programme_position.session == "optional_day_4"
 
 
 def test_load_missing_state_returns_empty(state_manager, tmp_path, settings):

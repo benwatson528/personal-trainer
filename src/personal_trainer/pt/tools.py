@@ -170,7 +170,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_history",
-            "description": "Read recent workout history for a programme (Strong or Concept2 CSV). Optionally filter by exercise name to find specific lift progression.",
+            "description": "Read recent workout history for a lifting programme. Optionally filter by exercise name to find specific lift progression.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -202,22 +202,17 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "Recommend today's session. You MUST call this for any 'what next' / "
                 "'what should I do today' question rather than answering from history. "
                 "Considers active programmes, programme position, recent training balance, "
-                "recovery/gaps and preferences. If recommended_modality is 'lifting' this "
-                "also generates a Strong CSV, validates it, saves it to generated/strong/ "
-                "and returns saved_path — so the user gets an importable file, not prose. "
-                "Returns the recommendation, the reasoning, and alternatives."
+                "recovery/gaps and preferences. Generates a Strong CSV, validates it, "
+                "saves it to generated/strong/ and returns saved_path — so the user gets "
+                "an importable file, not prose. Returns the recommendation, the reasoning, "
+                "and alternatives."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "user_request": {"type": "string", "default": ""},
-                    "recommended_modality": {
-                        "type": "string",
-                        "enum": ["lifting", "rowing"],
-                        "description": "Which modality you recommend. If lifting, a Strong CSV will be auto-generated.",
-                    },
                 },
-                "required": ["recommended_modality"],
+                "required": [],
             },
         },
     },
@@ -227,7 +222,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "name": "adapt_workout",
             "description": (
                 "Propose a small, explicit adaptation to a programmed workout (load, reps, "
-                "volume, rest, rowing pace/SPM, permitted substitution). Python validates "
+                "volume, rest, permitted substitution). Python validates "
                 "the adaptation against the adaptation policy before it is accepted."
             ),
             "parameters": {
@@ -518,37 +513,25 @@ class ToolExecutor:
         if programme is None:
             raise ToolError(f"Unknown programme: {args['programme_id']}")
         exercise_filter = args.get("exercise", "").strip()
-        if programme.modality == "lifting":
-            # Lifting history is the condensed session records; the raw app
-            # export is no longer kept.
-            history = self._sessions.render(args.get("max_rows", 40))
-            if not history.strip():
-                return {"ok": False,
-                        "error": f"No condensed sessions recorded yet for {programme.id}"}
-            if exercise_filter:
-                # Filter to only sessions mentioning the exercise.
-                filtered = []
-                for block in history.split("\n\n"):
-                    if exercise_filter.lower() in block.lower():
-                        filtered.append(block)
-                if not filtered:
-                    return {"ok": True, "programme_id": programme.id, "modality": programme.modality,
-                            "history": f"(no sessions found matching '{exercise_filter}')"}
-                history = "\n\n".join(filtered)
-            return {
-                "ok": True,
-                "programme_id": programme.id,
-                "modality": programme.modality,
-                "history": history,
-            }
-        if not programme.history_file or not self._storage.exists(programme.history_file):
-            return {"ok": False, "error": f"No history file for {programme.id}"}
-        csv_content = self._storage.read(programme.history_file)
+        # All programmes are lifting; history is condensed session records.
+        history = self._sessions.render(args.get("max_rows", 40))
+        if not history.strip():
+            return {"ok": False,
+                    "error": f"No condensed sessions recorded yet for {programme.id}"}
+        if exercise_filter:
+            # Filter to only sessions mentioning the exercise.
+            filtered = []
+            for block in history.split("\n\n"):
+                if exercise_filter.lower() in block.lower():
+                    filtered.append(block)
+            if not filtered:
+                return {"ok": True, "programme_id": programme.id,
+                        "history": f"(no sessions found matching '{exercise_filter}')"}
+            history = "\n\n".join(filtered)
         return {
             "ok": True,
             "programme_id": programme.id,
-            "modality": programme.modality,
-            "history": ctx.select_history_rows(csv_content, args.get("max_rows", 40)),
+            "history": history,
         }
 
     def _read_reference(self, args: dict) -> dict:
@@ -602,64 +585,47 @@ class ToolExecutor:
                     "last_completed_session": None,
                 }
 
-        # Recent history is only relevant once a modality is chosen, and only the
-        # chosen modality's own history is safe to send. The Strong export mixes
-        # rowing sessions in with the lifting ones, so a pile of rowing rows next
-        # to a lifting request is actively misleading. Lifting history is the
-        # condensed session records; a rowing turn needs none of it here.
-        recommended_modality = args.get("recommended_modality")
+        # All programmes are lifting; render recent session history for the prompt.
         recent_history_md = {}
-        if recommended_modality == "lifting":
-            lifting_programmes = [
-                p for p in context.active_programmes if p.modality == "lifting"
-            ]
-            if lifting_programmes:
-                lifting_id = lifting_programmes[0].id
-                sessions_history = self._sessions.render(
-                    self._settings.strong_generation.history_sample_sessions
+        active_programmes = context.active_programmes
+        if active_programmes:
+            lifting_id = active_programmes[0].id
+            sessions_history = self._sessions.render(
+                self._settings.strong_generation.history_sample_sessions
+            )
+            if sessions_history.strip():
+                recent_history_md[lifting_id] = sessions_history
+            elif lifting_id in context.recent_history:
+                # A freshly uploaded raw export has not been condensed yet.
+                recent_history_md[lifting_id] = self._history_to_markdown(
+                    context.recent_history[lifting_id]
                 )
-                if sessions_history.strip():
-                    recent_history_md[lifting_id] = sessions_history
-                elif lifting_id in context.recent_history:
-                    # A freshly uploaded raw export has not been condensed yet.
-                    recent_history_md[lifting_id] = self._history_to_markdown(
-                        context.recent_history[lifting_id]
-                    )
 
         result = {
             "ok": True,
-            "active_programmes": [p.id for p in context.active_programmes],
-            "recommended_modality": recommended_modality,
+            "active_programmes": [p.id for p in active_programmes],
             "recent_history_md": recent_history_md or None,
             "state": json.loads(state.model_dump_json(exclude_none=True)),
             "programme_positions": programme_positions,
             "note": _recommend_note(bool(recent_history_md)),
         }
 
-        # If the recommendation is lifting, automatically generate AND save the
-        # Strong CSV. The LLM doesn't need to remember — Python does it.
-        # Saving here matters: the LLM reports the workout as ready to import,
-        # so a generated-but-unsaved CSV would be a broken promise.
-        if recommended_modality == "lifting":
-            lifting_programmes = [p for p in context.active_programmes if p.modality == "lifting"]
-            if lifting_programmes:
-                programme = lifting_programmes[0]
-                gen_result = self._strong.generate(programme.id, args.get("user_request", ""))
-                payload = {
-                    "ok": gen_result.success,
-                    "csv": gen_result.csv,
-                    "message": gen_result.message,
-                    "errors": gen_result.errors,
-                    "saved_path": None,
-                    # Surfaced so the agent can tell the user what it changed
-                    # and why, rather than presenting an adapted workout as if
-                    # it were programmed verbatim.
-                    "adaptations": (gen_result.prescription or {}).get("adaptations") or [],
-                    "reasoning": (gen_result.prescription or {}).get("reasoning"),
-                }
-                if gen_result.success and gen_result.csv:
-                    payload.update(self._persist_generated(programme, gen_result))
-                result["strong_generation"] = payload
+        # Always generate Strong CSV for the first active lifting programme.
+        if active_programmes:
+            programme = active_programmes[0]
+            gen_result = self._strong.generate(programme.id, args.get("user_request", ""))
+            payload = {
+                "ok": gen_result.success,
+                "csv": gen_result.csv,
+                "message": gen_result.message,
+                "errors": gen_result.errors,
+                "saved_path": None,
+                "adaptations": (gen_result.prescription or {}).get("adaptations") or [],
+                "reasoning": (gen_result.prescription or {}).get("reasoning"),
+            }
+            if gen_result.success and gen_result.csv:
+                payload.update(self._persist_generated(programme, gen_result))
+            result["strong_generation"] = payload
 
         return result
 
@@ -732,10 +698,10 @@ class ToolExecutor:
         return payload
 
     def _validate_strong_csv(self, args: dict) -> dict:
-        lifting = self._programmes.by_modality("lifting")
-        if not lifting:
+        active = self._programmes.all()
+        if not active:
             return {"ok": False, "error": "No active lifting programme."}
-        schema = self._strong.schema(lifting[0].id)
+        schema = self._strong.schema(active[0].id)
         errors = validate_strong_csv(args["csv"], schema, expected_date=args.get("date"))
         return {"ok": not errors, "errors": errors}
 
@@ -768,7 +734,7 @@ class ToolExecutor:
         history_csv = None
         if programme.history_file and self._storage.exists(programme.history_file):
             history_csv = self._storage.read(programme.history_file)
-        if history_csv is None and programme.modality == "lifting":
+        if history_csv is None:
             # No raw export: reconcile against the condensed session records.
             history_csv = self._sessions.reconcile_csv()
         result = reconcile_completion(programme, self._state.load(), history_csv)

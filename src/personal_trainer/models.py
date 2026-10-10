@@ -11,8 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Modality = Literal["lifting", "rowing"]
-
 
 class ProgrammePosition(BaseModel):
     """Where in a programme a confirmed workout sits.
@@ -39,7 +37,6 @@ class ProgrammeState(BaseModel):
     """Per-programme cached state inside training_state.yaml."""
 
     active: bool = True
-    modality: Modality
     history_file: str | None = None
     reference: str | None = None
     generated_folder: str | None = None
@@ -86,7 +83,6 @@ class Programme(BaseModel):
 
     id: str
     name: str
-    modality: Modality
     reference: str | None = None
     history_file: str | None = None
     generated_folder: str | None = None

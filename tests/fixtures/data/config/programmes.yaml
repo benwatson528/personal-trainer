@@ -7,7 +7,6 @@
 programmes:
   - id: jnt_2
     name: "J&T 2.0"
-    modality: lifting
     reference: "programmes/J&T 2.0/reference.md"
     # Upload landing spot for a completed Strong CSV. Not kept as history:
     # `summarise_session` condenses it into sessions/*.yaml, which is the
@@ -18,10 +17,3 @@ programmes:
     # exercise/set structure as a pure Strong CSV skeleton with weights and reps
     # left blank. The LLM fills them in from the reference and recent history.
     templates_folder: "programmes/J&T 2.0/templates"
-
-  - id: pete_plan_beginner
-    name: "Beginner Pete Plan"
-    modality: rowing
-    reference: "programmes/Beginner Pete Plan/reference.md"
-    history_file: "history/concept2/concept2_history.csv"
-    generated_folder: null
