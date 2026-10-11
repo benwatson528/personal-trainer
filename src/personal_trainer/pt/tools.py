@@ -104,12 +104,11 @@ def _extract_yaml(text: str) -> str:
 
 def _extract_latest_workout(csv_text: str, target_date: str = "") -> dict:
     """
-    Extract the workout for target_date from a Strong CSV export.
+    Extract the most recent workout from a Strong CSV export.
 
-    Strong appends workouts to the bottom. If target_date is given, find the
-    workout whose Date column starts with that date (matching the date part
-    only, since Date includes time). If target_date is empty, fall back to
-    the last workout in the file.
+    Strong appends workouts to the bottom, so the last workout name in the file
+    is the most recent one. If the Workout column is empty, fall back to the
+    provided target_date to find the workout rows.
     """
     import csv as csv_module
     import io
@@ -119,23 +118,23 @@ def _extract_latest_workout(csv_text: str, target_date: str = "") -> dict:
     if not rows:
         return {"workout_name": "", "rows": [], "header": []}
 
-    target = target_date[:10] if target_date else ""  # YYYY-MM-DD
+    # Try to get the last workout name from the last row
+    last_workout = rows[-1].get("Workout", "").strip()
 
-    if target:
-        # Find all rows matching the target date (date part only)
+    if last_workout:
+        # Normal case: last workout name is present
+        workout_name = last_workout
+        workout_rows = [r for r in rows if r.get("Workout", "").strip() == last_workout]
+    elif target_date:
+        # Fallback: Workout column empty, use target_date to find rows
+        target = target_date[:10]  # YYYY-MM-DD
         matching = [r for r in rows if r.get("Date", "").strip().startswith(target)]
         if not matching:
             return {"workout_name": "", "rows": [], "header": []}
-        # The workout name is the Workout column of the matching rows
-        workout_name = matching[0].get("Workout", "").strip()
-        workout_rows = [r for r in rows if r.get("Workout", "").strip() == workout_name]
+        workout_name = matching[0].get("Workout", "").strip() or f"Workout {target}"
+        workout_rows = matching
     else:
-        # Fallback: last workout in file
-        last_workout = rows[-1].get("Workout", "").strip()
-        if not last_workout:
-            return {"workout_name": "", "rows": [], "header": []}
-        workout_name = last_workout
-        workout_rows = [r for r in rows if r.get("Workout", "").strip() == last_workout]
+        return {"workout_name": "", "rows": [], "header": []}
 
     header = list(rows[0].keys()) if rows else []
 

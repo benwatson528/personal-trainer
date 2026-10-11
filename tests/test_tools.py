@@ -463,13 +463,16 @@ def test_summarise_session_rejects_an_unknown_programme(executor):
     assert "Unknown programme" in result["error"]
 
 
-def test_summarise_session_rejects_missing_date(executor, upload_csv):
-    """Date not present in CSV returns error."""
+def test_summarise_session_uses_last_workout_when_date_not_found(executor, stub_llm, storage, upload_csv):
+    """When date not in CSV, falls back to the last workout in the file."""
+    _queue(stub_llm, SUMMARY)
     result = executor.execute("summarise_session", {
-        "programme_id": "jnt_2", "date": "2026-09-01",
+        "programme_id": "jnt_2", "date": "2026-09-01",  # date not in fixture CSV
     })
-    assert not result["ok"]
-    assert "no workout found" in result["error"].lower()
+    assert result["ok"], result
+    saved = storage.read(result["saved_path"])
+    # Should summarise the last workout (J&T 2.0 - 4 from 2026-06-23)
+    assert "J&T 2.0 - 4" in saved
 
 
 def test_summarise_session_is_registered(executor):
@@ -539,13 +542,16 @@ def test_summarise_session_rejects_an_unknown_programme(executor):
     assert "Unknown programme" in result["error"]
 
 
-def test_summarise_session_rejects_missing_date(executor, upload_csv):
-    """Date not present in CSV returns error."""
+def test_summarise_session_uses_last_workout_when_date_not_found(executor, stub_llm, storage, upload_csv):
+    """When date not in CSV, falls back to the last workout in the file."""
+    _queue(stub_llm, SUMMARY)
     result = executor.execute("summarise_session", {
-        "programme_id": "jnt_2", "date": "2026-09-01",
+        "programme_id": "jnt_2", "date": "2026-09-01",  # date not in fixture CSV
     })
-    assert not result["ok"]
-    assert "no workout found" in result["error"].lower()
+    assert result["ok"], result
+    saved = storage.read(result["saved_path"])
+    # Should summarise the last workout (J&T 2.0 - 4 from 2026-06-23)
+    assert "J&T 2.0 - 4" in saved
 
 
 def test_summarise_session_is_registered(executor):
