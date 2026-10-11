@@ -21,6 +21,50 @@ from pydantic import BaseModel, ConfigDict, create_model
 
 from .schema import StrongSchema
 
+
+def normalize_csv(csv_text: str, expected_cols: int | None = None) -> str:
+    """
+    Normalize CSV text by re-parsing and re-writing with proper quoting.
+
+    This handles the case where LLM output contains unquoted commas in note fields
+    that would otherwise be split into extra columns. Uses Python's csv module
+    to correctly parse quoted fields and re-write with proper quoting.
+
+    If expected_cols is provided, handles unquoted commas in trailing note columns
+    by joining excess columns back into the last expected column.
+    """
+    if not csv_text.strip():
+        return csv_text
+
+    reader = csv.reader(io.StringIO(csv_text))
+    rows = list(reader)
+    if not rows:
+        return csv_text
+
+    # If expected_cols is given and we have rows with extra columns, fix them
+    if expected_cols is not None:
+        fixed_rows = []
+        for row in rows:
+            if len(row) > expected_cols:
+                # Excess columns are from unquoted commas in trailing note columns
+                # Join excess columns back into the last expected column
+                excess = len(row) - expected_cols
+                # The last expected column index is expected_cols - 1
+                # Join the excess columns (including the last expected one) with commas
+                excess_cols = row[expected_cols - 1:]
+                fixed_row = row[:expected_cols - 1]
+                fixed_row.append(",".join(excess_cols))
+                fixed_rows.append(fixed_row)
+            else:
+                fixed_rows.append(row)
+        rows = fixed_rows
+
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+    writer.writerows(rows)
+    return out.getvalue().rstrip("\n")
+
+
 _PYDANTIC_TYPES = {
     "string": str,
     "integer": int,

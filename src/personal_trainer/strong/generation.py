@@ -36,7 +36,7 @@ from ..storage.base import StorageBackend
 from .equipment_rules import validate_equipment
 from .fidelity import validate_prescription_fidelity
 from .schema import StrongSchema, derive_schema, schema_from_template
-from .validation import validate_strong_csv
+from .validation import normalize_csv, validate_strong_csv
 
 _FENCE_RE = re.compile(r"```(?:csv)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
@@ -138,6 +138,11 @@ class StrongGenerationService:
             if candidate is None:
                 errors = ["No fenced CSV code block found in the LLM response."]
                 continue
+
+            # Normalize CSV: re-parse and re-write with proper quoting to handle
+            # unquoted commas in note fields that the LLM may have produced.
+            candidate = normalize_csv(candidate)
+
             errors = validate_strong_csv(candidate, schema, expected_timestamp=session_date)
             if errors:
                 logger.info("generate: structural validation failed: %s", errors)
