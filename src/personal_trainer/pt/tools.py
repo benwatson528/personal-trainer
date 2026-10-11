@@ -801,6 +801,16 @@ class ToolExecutor:
                 f"No CSV files found in {programme.completed_workouts_folder}. Upload the "
                 "completed workout export to Drive first."
             )
+        # Guardrail: check if the newest CSV's date already has a session summary.
+        # Extract the date from the first data row of the CSV.
+        csv_lines = history_csv.strip().splitlines()
+        if len(csv_lines) > 1:
+            first_data = csv_lines[1]  # skip header
+            date_cell = first_data.split(",")[0].strip() if "," in first_data else ""
+            if date_cell and self._sessions.has_session_for_date(date_cell):
+                return {"ok": False,
+                        "error": f"Session for {date_cell} already summarized (duplicate CSV). "
+                                 f"Upload a different workout or use a different date."}
         rows = _tail_rows(history_csv, self._settings.session_summary.summary_rows)
         if not rows:
             raise ToolError("History file is empty")

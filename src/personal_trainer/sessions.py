@@ -247,6 +247,20 @@ class SessionSummaries:
                 return None
         return None
 
+    def has_session_for_date(self, date: str) -> bool:
+        """Check if a session for this date has already been summarized."""
+        target = date[:10]  # YYYY-MM-DD
+        for path in self.paths():
+            try:
+                data = yaml.safe_load(self._storage.read(path)) or {}
+            except (FileNotFoundError, yaml.YAMLError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            if str(data.get("date", ""))[:10] == target:
+                return True
+        return False
+
 
 def _yaml_scalar(value: str) -> str:
     """Quote a scalar only when YAML would otherwise misread it."""
