@@ -69,9 +69,12 @@ class StateManager:
         self.save(state)
         return state
 
-    def add_memory_preference(self, preference: str) -> TrainingState:
+    def add_memory_preference(self, programme_id: str, preference: str) -> TrainingState:
         state = self.load()
-        if preference not in state.memory.preferences:
-            state.memory.preferences.append(preference)
+        if programme_id not in state.programmes:
+            raise KeyError(f"Unknown programme: {programme_id}")
+        programme = state.programmes[programme_id]
+        if preference not in programme.memory.preferences:
+            programme.memory.preferences.append(preference)
             self.save(state)
         return state

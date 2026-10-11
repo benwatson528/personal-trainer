@@ -17,3 +17,22 @@ programmes:
     # exercise/set structure as a pure Strong CSV skeleton with weights and reps
     # left blank. The LLM fills them in from the reference and recent history.
     templates_folder: "programmes/J&T 2.0/templates"
+    # Adaptation policy: what kinds of adaptations the agent may propose
+    # for this programme. No fixed percentage limits — the agent determines
+    # appropriate magnitudes based on history and context.
+    adaptation_policy:
+      allow_load_adjustment: true
+      allow_rep_adjustment: true
+      allow_volume_adjustment: true
+      allow_rest_adjustment: true
+      allow_exercise_substitution: true
+    # Training preferences for this programme.
+    training_preferences:
+      desired_sessions_per_week:
+        lifting: 3
+      fixed_weekdays: false
+      double_sessions_preferred: false
+    # Durable coaching memory for this programme.
+    memory:
+      preferences:
+        - User prefers flexible training days rather than fixed weekdays.

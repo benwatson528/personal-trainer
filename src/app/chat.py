@@ -63,7 +63,9 @@ class PersonalTrainer:
         self._tools = ToolExecutor(
             storage, self._state, programme_manager, self._strong, settings, llm,
         )
-        self._memory = MemoryManager(self._state)
+        self._memory = MemoryManager(
+            self._state, self._programmes, self._storage, self._settings.folders.programmes_config
+        )
 
     # ------------------------------------------------------------------ public
 
@@ -183,6 +185,7 @@ class PersonalTrainer:
         state = self._state.load()
         active = self._programmes.resolve_active(state)
         programmes = []
+        all_memory = []
         for p in active:
             cached = state.programmes.get(p.id)
             entry = f"{p.name}"
@@ -197,10 +200,13 @@ class PersonalTrainer:
                 else:
                     entry += f" — last confirmed: {ref.label or ref.id}"
             programmes.append(entry)
+            # Collect memory from each programme
+            if p.memory.preferences:
+                all_memory.extend(p.memory.preferences)
         return build_system_prompt(
             programmes=programmes,
             state_yaml=json.dumps(state.model_dump(exclude_none=True), default=str),
-            memory=self._memory.all(),
+            memory=all_memory,
             equipment=load_equipment_from_storage(
                 self._storage, self._settings.folders.equipment_config
             ).describe_brief(),

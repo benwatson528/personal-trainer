@@ -75,9 +75,7 @@ class CoachingMemory(BaseModel):
 
 class TrainingState(BaseModel):
     version: int = 1
-    training_preferences: TrainingPreferences = Field(default_factory=TrainingPreferences)
     programmes: dict[str, ProgrammeState] = Field(default_factory=dict)
-    memory: CoachingMemory = Field(default_factory=CoachingMemory)
 
     model_config = {"extra": "allow"}
 
@@ -98,6 +96,10 @@ class Programme(BaseModel):
     # for this programme. No fixed percentage limits — the agent determines
     # appropriate magnitudes based on history and context.
     adaptation_policy: AdaptationPolicy = Field(default_factory=AdaptationPolicy)
+    # Training preferences for this programme.
+    training_preferences: TrainingPreferences = Field(default_factory=TrainingPreferences)
+    # Durable coaching memory for this programme.
+    memory: CoachingMemory = Field(default_factory=CoachingMemory)
     # SHA256 hash of the most recent workout's exercise data (set by summarise_session).
     # Used to detect duplicate CSV uploads (Strong exports cumulative history).
     last_workout_hash: str | None = None

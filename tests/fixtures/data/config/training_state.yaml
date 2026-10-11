@@ -4,23 +4,9 @@
 # Drive. Tests assert against the fixed programme positions below (see
 # tests/test_state_manager.py), so this file is a committed fixture, not data.
 version: 1
-training_preferences:
-  desired_sessions_per_week:
-    lifting: 3
-  fixed_weekdays: false
-  double_sessions_preferred: false
 programmes:
   jnt_2:
     active: true
     latest_confirmed_workout: null
     pending_workout: null
     last_workout_hash: null
-adaptation_policy:
-  allow_load_adjustment: true
-  allow_rep_adjustment: true
-  allow_volume_adjustment: true
-  allow_rest_adjustment: true
-  allow_exercise_substitution: true
-memory:
-  preferences:
-    - User prefers flexible training days rather than fixed weekdays.
