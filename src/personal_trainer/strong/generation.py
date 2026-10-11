@@ -97,7 +97,7 @@ class StrongGenerationService:
         schema = self._schema(programme)
         sample = self._sample_history(programme)
         state = self._state.load()
-        policy = state.adaptation_policy
+        policy = programme.adaptation_policy
 
         system_prompt = self._system_prompt()
         prescription = self._determine_prescription(
@@ -414,7 +414,7 @@ class StrongGenerationService:
             f"## Recent training (condensed sessions)\n{sample}\n\n"
             f"{equipment.describe() if equipment else ''}\n\n"
             f"## Current state\n{self._format_state(state)}\n\n"
-            f"## Adaptation policy\n{state.adaptation_policy.model_dump_json()}\n\n"
+            f"## Adaptation policy\n{programme.adaptation_policy.model_dump_json()}\n\n"
             f"## Workout prescription (training decision — do not change it)\n"
             f"{json.dumps(prescription, indent=2)}\n\n"
         )
@@ -464,7 +464,7 @@ class StrongGenerationService:
         parts.append(f"{equipment.describe() if equipment else ''}\n\n")
         parts.append(f"## Current state\n{self._format_state(state)}\n\n")
         parts.append(
-            f"## Adaptation policy\n{state.adaptation_policy.model_dump_json()}\n\n"
+            f"## Adaptation policy\n{programme.adaptation_policy.model_dump_json()}\n\n"
         )
         parts.append(
             "Analyse the previous relevant sessions, exercise progression, recent "

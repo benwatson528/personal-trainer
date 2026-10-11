@@ -77,7 +77,6 @@ class TrainingState(BaseModel):
     version: int = 1
     training_preferences: TrainingPreferences = Field(default_factory=TrainingPreferences)
     programmes: dict[str, ProgrammeState] = Field(default_factory=dict)
-    adaptation_policy: AdaptationPolicy = Field(default_factory=AdaptationPolicy)
     memory: CoachingMemory = Field(default_factory=CoachingMemory)
 
     model_config = {"extra": "allow"}
@@ -95,6 +94,10 @@ class Programme(BaseModel):
     # Folder holding one fill-in template per session day (e.g.
     # "programmes/J&T 2.0/templates/day_1.md"). Optional.
     templates_folder: str | None = None
+    # Adaptation policy: what kinds of adaptations the agent may propose
+    # for this programme. No fixed percentage limits — the agent determines
+    # appropriate magnitudes based on history and context.
+    adaptation_policy: AdaptationPolicy = Field(default_factory=AdaptationPolicy)
     # SHA256 hash of the most recent workout's exercise data (set by summarise_session).
     # Used to detect duplicate CSV uploads (Strong exports cumulative history).
     last_workout_hash: str | None = None

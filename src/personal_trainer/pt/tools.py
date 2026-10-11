@@ -719,8 +719,8 @@ class ToolExecutor:
     def _adapt_workout(self, args: dict) -> dict:
         validate_programme_id(args["programme_id"], self._active_ids())
         validate_prescription(args.get("prescription"))
-        state = self._state.load()
-        validate_adaptation(args.get("adaptations"), state.adaptation_policy)
+        programme = self._programmes.get(args["programme_id"])
+        validate_adaptation(args.get("adaptations"), programme.adaptation_policy)
         return {
             "ok": True,
             "adapted_prescription": args["prescription"],
