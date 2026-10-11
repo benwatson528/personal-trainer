@@ -102,6 +102,65 @@ def _extract_yaml(text: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _extract_latest_workout(csv_text: str, target_date: str = "") -> dict:
+    """
+    Extract the workout for target_date from a Strong CSV export.
+
+    Strong appends workouts to the bottom. If target_date is given, find the
+    workout whose Date column starts with that date (matching the date part
+    only, since Date includes time). If target_date is empty, fall back to
+    the last workout in the file.
+    """
+    import csv as csv_module
+    import io
+
+    reader = csv_module.DictReader(io.StringIO(csv_text))
+    rows = list(reader)
+    if not rows:
+        return {"workout_name": "", "rows": [], "header": []}
+
+    target = target_date[:10] if target_date else ""  # YYYY-MM-DD
+
+    if target:
+        # Find all rows matching the target date (date part only)
+        matching = [r for r in rows if r.get("Date", "").strip().startswith(target)]
+        if not matching:
+            return {"workout_name": "", "rows": [], "header": []}
+        # The workout name is the Workout column of the matching rows
+        workout_name = matching[0].get("Workout", "").strip()
+        workout_rows = [r for r in rows if r.get("Workout", "").strip() == workout_name]
+    else:
+        # Fallback: last workout in file
+        last_workout = rows[-1].get("Workout", "").strip()
+        if not last_workout:
+            return {"workout_name": "", "rows": [], "header": []}
+        workout_name = last_workout
+        workout_rows = [r for r in rows if r.get("Workout", "").strip() == last_workout]
+
+    header = list(rows[0].keys()) if rows else []
+
+    return {
+        "workout_name": workout_name,
+        "rows": workout_rows,
+        "header": header,
+    }
+
+
+def _workout_rows_to_text(extracted: dict, max_rows: int = 40) -> str:
+    """Convert extracted workout rows to CSV text for the LLM prompt."""
+    if not extracted["rows"]:
+        return ""
+    import csv as csv_module
+    import io
+
+    out = io.StringIO()
+    writer = csv_module.writer(out, lineterminator="\n")
+    writer.writerow(extracted["header"])
+    for row in extracted["rows"][-max_rows:]:
+        writer.writerow([row.get(h, "") for h in extracted["header"]])
+    return out.getvalue().rstrip("\n")
+
+
 def _recommend_note(has_history: bool) -> str:
     """Guidance for reading the recommendation payload.
 
@@ -809,9 +868,11 @@ class ToolExecutor:
                     "error": f"Duplicate workout detected (hash {workout_hash}). "
                              f"This CSV has already been processed. Upload a new workout."}
 
-        rows = _tail_rows(history_csv, self._settings.session_summary.summary_rows)
-        if not rows:
-            raise ToolError("History file is empty")
+        # Extract the most recent workout from the CSV (last workout name + its rows)
+        extracted = _extract_latest_workout(history_csv, date)
+        if not extracted["rows"]:
+            raise ToolError("History file is empty or no workout found")
+        workout_name_from_csv = extracted["workout_name"]
 
         # After successful summarisation, update the stored hash so future
         # duplicate uploads are rejected.
@@ -827,11 +888,18 @@ class ToolExecutor:
 
         hint = args.get("workout") or ""
         feedback = str(args.get("feedback") or "").strip()
+
+        # Convert extracted rows to CSV text for the prompt (bounded)
+        rows = _workout_rows_to_text(extracted, self._settings.session_summary.summary_rows)
+        if not rows:
+            raise ToolError("Extracted workout has no rows")
+
         prompt = (
             f"Condense the session trained on {date}"
             + (f" ({hint})" if hint else "")
-            + ".\n\nThe rows below are from the training app's export. Strong appends the newest "
-            "workouts to the bottom, so the session you want is at the end. "
+            + ".\n\nThe rows below are from the training app's export for the workout "
+            f"'{workout_name_from_csv}'. Strong appends workouts to the bottom, "
+            "so these rows are the complete session. "
             f"Find every row whose Date begins with {date} — the Date column "
             "carries a time as well as the day, so match on the date part only. "
             "A workout name repeats across separate sessions, so the date, not "
