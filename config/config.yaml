@@ -46,8 +46,13 @@ folders:
   # workout. Our own format, so Python may read it; the raw app export is never
   # parsed.
   sessions: sessions
-  state: state
+  # Training state file (per-workout mutable state: active, confirmed/pending workouts, hashes)
+  state: config/training_state.yaml
   generated_strong: generated/strong
   # Content-config, read from the storage root (Drive) at startup.
   programmes_config: config/programmes.yaml
   equipment_config: config/equipment.yaml
+
+# Where completed workouts are uploaded (per-programme; see config/programmes.yaml).
+# The app reads the newest file from this folder to summarise the session.
+# completed_workouts_folder: uploads/strong
