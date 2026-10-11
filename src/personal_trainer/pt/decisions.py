@@ -8,6 +8,7 @@ unsupported evidence, and every decision must reference an active programme.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
@@ -26,10 +27,57 @@ def _newest_csv_in_folder(storage: StorageBackend, folder: str) -> str | None:
     csv_files = [f for f in files if f.endswith(".csv")]
     if not csv_files:
         return None
-    # Files are listed with paths like "uploads/strong/2026-01-02_workout.csv"
-    # Sort by filename (which starts with date) to get the newest.
     csv_files.sort(key=lambda p: PurePosixPath(p).name, reverse=True)
     return storage.read(csv_files[0])
+
+
+def _hash_newest_workout(csv_text: str) -> str | None:
+    """
+    Compute SHA256 hash of the newest workout's exercise data.
+
+    Strong exports cumulative history with the newest workout at the bottom.
+    This extracts the last workout block (by Date+Workout) and hashes
+    the Exercise/Set/Weight/Reps columns so duplicate uploads are detected
+    even if the export file name changes.
+    """
+    if not csv_text.strip():
+        return None
+    reader = csv.DictReader(io.StringIO(csv_text))
+    rows = list(reader)
+    if not rows:
+        return None
+
+    # Find the last workout: last row's Date+Workout combo, then collect all
+    # rows with that same Date+Workout (a workout can span multiple rows).
+    last = rows[-1]
+    last_date = last.get("Date", "").strip()
+    last_workout = last.get("Workout", "").strip()
+    if not last_date or not last_workout:
+        return None
+
+    workout_rows = [
+        r for r in rows
+        if r.get("Date", "").strip() == last_date and r.get("Workout", "").strip() == last_workout
+    ]
+    if not workout_rows:
+        return None
+
+    # Hash the exercise data only (Exercise, Set Order, Weight, Reps)
+    # This is what actually matters for detecting "same workout".
+    parts = []
+    for r in workout_rows:
+        ex = r.get("Exercise", "").strip()
+        if not ex:
+            continue
+        set_order = r.get("Set Order", "").strip()
+        weight = r.get("Weight", "").strip()
+        reps = r.get("Reps", "").strip()
+        parts.append(f"{ex}|{set_order}|{weight}|{reps}")
+
+    if not parts:
+        return None
+    payload = "\n".join(parts)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]  # truncate for readability
 
 
 @dataclass

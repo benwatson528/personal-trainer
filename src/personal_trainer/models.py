@@ -90,6 +90,9 @@ class Programme(BaseModel):
     # Folder holding one fill-in template per session day (e.g.
     # "programmes/J&T 2.0/templates/day_1.md"). Optional.
     templates_folder: str | None = None
+    # SHA256 hash of the most recent workout's exercise data (set by summarise_session).
+    # Used to detect duplicate CSV uploads (Strong exports cumulative history).
+    last_workout_hash: str | None = None
 
 
 class ReconciliationResult(BaseModel):

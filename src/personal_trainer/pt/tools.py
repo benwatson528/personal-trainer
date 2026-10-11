@@ -801,19 +801,29 @@ class ToolExecutor:
                 f"No CSV files found in {programme.completed_workouts_folder}. Upload the "
                 "completed workout export to Drive first."
             )
-        # Guardrail: check if the newest CSV's date already has a session summary.
-        # Extract the date from the first data row of the CSV.
-        csv_lines = history_csv.strip().splitlines()
-        if len(csv_lines) > 1:
-            first_data = csv_lines[1]  # skip header
-            date_cell = first_data.split(",")[0].strip() if "," in first_data else ""
-            if date_cell and self._sessions.has_session_for_date(date_cell):
-                return {"ok": False,
-                        "error": f"Session for {date_cell} already summarized (duplicate CSV). "
-                                 f"Upload a different workout or use a different date."}
+        # Guardrail: hash the newest workout in the CSV and compare with stored hash.
+        from .decisions import _hash_newest_workout
+        workout_hash = _hash_newest_workout(history_csv)
+        if workout_hash and programme.last_workout_hash == workout_hash:
+            return {"ok": False,
+                    "error": f"Duplicate workout detected (hash {workout_hash}). "
+                             f"This CSV has already been processed. Upload a new workout."}
+
         rows = _tail_rows(history_csv, self._settings.session_summary.summary_rows)
         if not rows:
             raise ToolError("History file is empty")
+
+        # After successful summarisation, update the stored hash so future
+        # duplicate uploads are rejected.
+        if workout_hash:
+            self._programmes.update_last_workout_hash(
+                self._storage,
+                self._settings.folders.programmes_config,
+                programme.id,
+                workout_hash,
+            )
+            # Update in-memory copy for this request cycle.
+            programme.last_workout_hash = workout_hash
 
         hint = args.get("workout") or ""
         feedback = str(args.get("feedback") or "").strip()

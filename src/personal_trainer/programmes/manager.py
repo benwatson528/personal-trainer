@@ -62,3 +62,14 @@ class ProgrammeManager:
                 continue
             active.append(programme)
         return active
+
+    def update_last_workout_hash(self, storage: StorageBackend, path: str, programme_id: str, hash_val: str) -> None:
+        """Update the last_workout_hash for a programme in the storage YAML."""
+        import yaml
+        text = storage.read(path)
+        data = yaml.safe_load(text) or {}
+        for prog in data.get("programmes", []):
+            if prog.get("id") == programme_id:
+                prog["last_workout_hash"] = hash_val
+                break
+        storage.write(path, yaml.safe_dump(data, sort_keys=False))
