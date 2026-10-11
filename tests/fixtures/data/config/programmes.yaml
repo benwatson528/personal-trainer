@@ -11,7 +11,7 @@ programmes:
     # Upload landing folder for completed Strong CSVs. Not kept as history:
     # `summarise_session` reads the newest file here, condenses the session
     # into sessions/*.yaml, and the CSV can be kept or overwritten.
-    completed_workouts_folder: "uploads/strong"
+    completed_workouts_folder: "completed/strong"
     generated_folder: "generated/strong"
     # One fill-in template per session day (day_1.csv .. day_4.csv): the day's
     # exercise/set structure as a pure Strong CSV skeleton with weights and reps

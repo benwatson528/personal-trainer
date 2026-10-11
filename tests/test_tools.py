@@ -400,8 +400,8 @@ def upload_csv(data_dir):
             f"Bench Press (Barbell),{i % 5 + 1},80,5,,,,,,"
         )
     rows.extend(workout_rows)
-    # Write to uploads/strong with a date-based filename (like real Strong exports)
-    path = data_dir / "uploads" / "strong" / "2026-06-23_strong.csv"
+    # Write to completed/strong with a date-based filename (like real Strong exports)
+    path = data_dir / "completed" / "strong" / "2026-06-23_strong.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(rows) + "\n")
     return path
@@ -492,7 +492,7 @@ def test_summarise_session_prefers_the_name_on_the_rows(executor, storage, stub_
     rows = [UPLOAD_HEADER] + [
         "2026-09-01 18:00:00,Europe/London (+01:00),Rowing A,3000,,Bench Press (Barbell),1,90,4,,,,,,",
     ]
-    path = data_dir / "uploads" / "strong" / "2026-09-01_strong.csv"
+    path = data_dir / "completed" / "strong" / "2026-09-01_strong.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(rows) + "\n")
 
@@ -513,7 +513,7 @@ def test_summarise_session_falls_back_to_the_hint_when_no_name_given(executor, s
     rows = [UPLOAD_HEADER] + [
         "2026-09-01 18:00:00,Europe/London (+01:00),Upper,3000,,Bench Press (Barbell),1,90,4,,,,,,",
     ]
-    path = data_dir / "uploads" / "strong" / "2026-09-01_strong.csv"
+    path = data_dir / "completed" / "strong" / "2026-09-01_strong.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(rows) + "\n")
 

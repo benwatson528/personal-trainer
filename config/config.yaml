@@ -35,11 +35,6 @@ strong_generation:
   # the athlete's training history.
   history_sample_sessions: 20
 
-session_summary:
-  # Export rows sent to the LLM when condensing one session. A session is ~20
-  # rows, so this covers several recent ones cheaply.
-  summary_rows: 120
-
 folders:
   programmes: programmes
   # Condensed per-session lifting history, extracted by the LLM after each
