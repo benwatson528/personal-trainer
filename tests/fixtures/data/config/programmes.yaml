@@ -8,10 +8,10 @@ programmes:
   - id: jnt_2
     name: "J&T 2.0"
     reference: "programmes/J&T 2.0/reference.md"
-    # Upload landing spot for a completed Strong CSV. Not kept as history:
-    # `summarise_session` condenses it into sessions/*.yaml, which is the
-    # lifting history; generation reads those, not the raw export.
-    history_file: "history/strong/strong_history.csv"
+    # Upload landing folder for completed Strong CSVs. Not kept as history:
+    # `summarise_session` reads the newest file here, condenses the session
+    # into sessions/*.yaml, and the CSV can be kept or overwritten.
+    completed_workouts_folder: "uploads/strong"
     generated_folder: "generated/strong"
     # One fill-in template per session day (day_1.csv .. day_4.csv): the day's
     # exercise/set structure as a pure Strong CSV skeleton with weights and reps

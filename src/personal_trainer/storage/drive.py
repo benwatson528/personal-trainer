@@ -1,6 +1,6 @@
 """Google Drive storage backend.
 
-Maps logical paths (e.g. "history/strong/strong_history.csv") to files under
+Maps logical paths (e.g. "uploads/strong/latest.csv") to files under
 a root "Personal Trainer" folder in Drive (spec section 6). Authenticates as
 the user via OAuth (see scripts/gdrive_auth.py) — the only route for personal
 accounts, since a service account cannot own files. A service account is

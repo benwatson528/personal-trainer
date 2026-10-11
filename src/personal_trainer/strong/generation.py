@@ -28,6 +28,7 @@ logger = logging.getLogger("personal_trainer.strong.generation")
 from ..config import Settings
 from ..equipment import Equipment, load_equipment_from_storage
 from ..integrations.llm import LLMClient
+from ..pt.decisions import _newest_csv_in_folder
 from ..programmes.manager import ProgrammeManager
 from ..sessions import SessionSummaries
 from ..state.manager import StateManager
@@ -260,8 +261,10 @@ class StrongGenerationService:
         template = self._any_template(programme)
         if template:
             return schema_from_template(template)
-        if programme.history_file and self._storage.exists(programme.history_file):
-            return derive_schema(self._storage.read(programme.history_file))
+        if programme.completed_workouts_folder:
+            csv_content = _newest_csv_in_folder(self._storage, programme.completed_workouts_folder)
+            if csv_content:
+                return derive_schema(csv_content)
         return StrongSchema()
 
     def _day_from_state(self, programme_id: str, state) -> int | None:

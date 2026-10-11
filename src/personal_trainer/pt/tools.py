@@ -726,14 +726,14 @@ class ToolExecutor:
         return {"ok": True, "saved_path": path}
 
     def _reconcile_workout(self, args: dict) -> dict:
-        from .decisions import reconcile_completion
+        from .decisions import reconcile_completion, _newest_csv_in_folder
 
         programme = self._programmes.get(args["programme_id"])
         if programme is None:
             raise ToolError(f"Unknown programme: {args['programme_id']}")
         history_csv = None
-        if programme.history_file and self._storage.exists(programme.history_file):
-            history_csv = self._storage.read(programme.history_file)
+        if programme.completed_workouts_folder:
+            history_csv = _newest_csv_in_folder(self._storage, programme.completed_workouts_folder)
         if history_csv is None:
             # No raw export: reconcile against the condensed session records.
             history_csv = self._sessions.reconcile_csv()
@@ -781,19 +781,26 @@ class ToolExecutor:
         and the summariser stores it as a note on the session — the session YAML
         is the only place feedback lives.
         """
+        from .decisions import _newest_csv_in_folder
+
         programme = self._programmes.get(args["programme_id"])
         if programme is None:
             raise ToolError(f"Unknown programme: {args['programme_id']}")
         date = str(args.get("date") or "").strip()
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
             raise ToolError(f"date must be YYYY-MM-DD, got {date!r}")
-        if not programme.history_file or not self._storage.exists(programme.history_file):
+        if not programme.completed_workouts_folder:
             raise ToolError(
-                f"No completed Strong CSV to summarise for {programme.id}. Upload the "
-                "completed workout export to Drive first."
+                f"No completed_workouts_folder configured for {programme.id}. Set "
+                "completed_workouts_folder in config/programmes.yaml."
             )
 
-        history_csv = self._storage.read(programme.history_file)
+        history_csv = _newest_csv_in_folder(self._storage, programme.completed_workouts_folder)
+        if not history_csv:
+            raise ToolError(
+                f"No CSV files found in {programme.completed_workouts_folder}. Upload the "
+                "completed workout export to Drive first."
+            )
         rows = _tail_rows(history_csv, self._settings.session_summary.summary_rows)
         if not rows:
             raise ToolError("History file is empty")

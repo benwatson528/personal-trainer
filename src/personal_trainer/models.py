@@ -84,7 +84,8 @@ class Programme(BaseModel):
     id: str
     name: str
     reference: str | None = None
-    history_file: str | None = None
+    # Folder where completed Strong CSVs are uploaded (one file per workout).
+    completed_workouts_folder: str | None = None
     generated_folder: str | None = None
     # Folder holding one fill-in template per session day (e.g.
     # "programmes/J&T 2.0/templates/day_1.md"). Optional.

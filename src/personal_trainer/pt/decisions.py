@@ -10,10 +10,26 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 
 from ..models import Programme, ReconciliationResult, TrainingState
 from ..programmes.manager import ProgrammeManager
 from ..storage.base import StorageBackend
+
+
+def _newest_csv_in_folder(storage: StorageBackend, folder: str) -> str | None:
+    """Return the content of the newest CSV file in a folder, or None."""
+    try:
+        files = storage.list_files(folder)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    csv_files = [f for f in files if f.endswith(".csv")]
+    if not csv_files:
+        return None
+    # Files are listed with paths like "uploads/strong/2026-01-02_workout.csv"
+    # Sort by filename (which starts with date) to get the newest.
+    csv_files.sort(key=lambda p: PurePosixPath(p).name, reverse=True)
+    return storage.read(csv_files[0])
 
 
 @dataclass
@@ -35,10 +51,10 @@ class DecisionService:
         active = self._programmes.resolve_active(state)
         recent_history: dict[str, str] = {}
         for programme in active:
-            if programme.history_file and self._storage.exists(programme.history_file):
-                recent_history[programme.id] = _recent_rows(
-                    self._storage.read(programme.history_file)
-                )
+            if programme.completed_workouts_folder:
+                csv_content = _newest_csv_in_folder(self._storage, programme.completed_workouts_folder)
+                if csv_content:
+                    recent_history[programme.id] = _recent_rows(csv_content)
         return DecisionContext(
             state=state,
             active_programmes=active,

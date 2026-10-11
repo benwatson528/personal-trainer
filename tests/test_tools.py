@@ -387,7 +387,8 @@ def upload_csv(data_dir):
             f"2026-06-{day:02d} 18:00:00,Europe/London (+01:00),J&T 2.0 - 4,3000,,"
             f"Squat (Barbell),{i % 5 + 1},100,5,,,,,,"
         )
-    path = data_dir / "history" / "strong" / "strong_history.csv"
+    # Write to uploads/strong with a date-based filename (like real Strong exports)
+    path = data_dir / "uploads" / "strong" / "2026-06-23_strong.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(rows) + "\n")
     return path

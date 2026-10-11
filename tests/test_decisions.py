@@ -17,7 +17,7 @@ HISTORY = (
 def lifting_programme():
     return Programme(
         id="jnt_2", name="J&T 2.0",
-        history_file="history/strong/strong_history.csv",
+        completed_workouts_folder="uploads/strong",
     )
 
 
