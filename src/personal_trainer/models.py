@@ -34,14 +34,17 @@ class WorkoutRef(BaseModel):
 
 
 class ProgrammeState(BaseModel):
-    """Per-programme cached state inside training_state.yaml."""
+    """Per-programme cached state inside training_state.yaml.
+
+    Only state that changes per workout. Programme config (reference,
+    completed_workouts_folder, generated_folder, templates_folder) lives
+    in the Programme model from programmes.yaml.
+    """
 
     active: bool = True
-    history_file: str | None = None
-    reference: str | None = None
-    generated_folder: str | None = None
     latest_confirmed_workout: WorkoutRef | None = None
     pending_workout: WorkoutRef | None = None  # prescribed, awaiting completion
+    last_workout_hash: str | None = None  # for duplicate detection
 
 
 class TrainingPreferences(BaseModel):

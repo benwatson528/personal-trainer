@@ -12,8 +12,9 @@ training_preferences:
 programmes:
   jnt_2:
     active: true
-    reference: programmes/J&T 2.0/reference.md
-    generated_folder: generated/strong
+    latest_confirmed_workout: null
+    pending_workout: null
+    last_workout_hash: null
 adaptation_policy:
   allow_load_adjustment: true
   allow_rep_adjustment: true
