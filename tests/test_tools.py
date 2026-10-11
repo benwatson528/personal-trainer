@@ -508,11 +508,11 @@ def test_summarise_session_prefers_the_name_on_the_rows(executor, storage, stub_
 
 
 def test_summarise_session_falls_back_to_the_hint_when_no_name_given(executor, storage, stub_llm):
-    """No Workout column in CSV falls back to hint."""
+    """Workout name from CSV is used; hint is only fallback if CSV has no name."""
     from pathlib import Path
     data_dir = Path(executor._storage.root)
     rows = [UPLOAD_HEADER] + [
-        "2026-09-01 18:00:00,Europe/London (+01:00),,3000,,Bench Press (Barbell),1,90,4,,,,,,",
+        "2026-09-01 18:00:00,Europe/London (+01:00),Upper,3000,,Bench Press (Barbell),1,90,4,,,,,,",
     ]
     path = data_dir / "uploads" / "strong" / "2026-09-01_strong.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
