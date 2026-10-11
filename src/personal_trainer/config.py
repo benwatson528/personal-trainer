@@ -65,7 +65,7 @@ class SessionSummaryConfig(BaseModel):
 class FolderConfig(BaseModel):
     programmes: str = "programmes"
     sessions: str = "sessions"
-    state: str = "state"
+    state: str = "config/training_state.yaml"
     generated_strong: str = "generated/strong"
     # Content-config files, read through the storage backend so they live in
     # Drive next to the data they describe rather than in the local repo. Only

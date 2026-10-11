@@ -16,10 +16,8 @@ programmes:
     generated_folder: generated/strong
 adaptation_policy:
   allow_load_adjustment: true
-  max_load_change_percent: 10.0
   allow_rep_adjustment: true
   allow_volume_adjustment: true
-  max_volume_change_percent: 25.0
   allow_rest_adjustment: true
   allow_exercise_substitution: true
 memory:

@@ -25,30 +25,22 @@ def validate_adaptation(
     adaptations: list[dict],
     policy: AdaptationPolicy,
 ) -> None:
-    """Check proposed adaptations stay within the adaptation policy."""
+    """Check proposed adaptations are permitted by the adaptation policy.
+
+    Magnitudes are not capped by fixed percentages — the agent determines
+    appropriate adaptation sizes based on the athlete's history and context.
+    """
     for adaptation in adaptations or []:
         kind = (adaptation.get("type") or "").lower()
         if kind in ("load", "load_adjustment"):
             if not policy.allow_load_adjustment:
                 raise ActionValidationError("Load adjustment is not permitted by policy.")
-            pct = abs(float(adaptation.get("percent", 0)))
-            if pct > policy.max_load_change_percent:
-                raise ActionValidationError(
-                    f"Load change of {pct}% exceeds the permitted "
-                    f"{policy.max_load_change_percent}%."
-                )
         elif kind in ("rep", "rep_adjustment"):
             if not policy.allow_rep_adjustment:
                 raise ActionValidationError("Rep adjustment is not permitted by policy.")
         elif kind in ("volume", "volume_adjustment"):
             if not policy.allow_volume_adjustment:
                 raise ActionValidationError("Volume adjustment is not permitted by policy.")
-            pct = abs(float(adaptation.get("percent", 0)))
-            if pct > policy.max_volume_change_percent:
-                raise ActionValidationError(
-                    f"Volume change of {pct}% exceeds the permitted "
-                    f"{policy.max_volume_change_percent}%."
-                )
         elif kind in ("rest", "rest_adjustment"):
             if not policy.allow_rest_adjustment:
                 raise ActionValidationError("Rest adjustment is not permitted by policy.")

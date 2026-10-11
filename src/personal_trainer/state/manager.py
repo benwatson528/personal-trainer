@@ -16,9 +16,14 @@ STATE_FILENAME = "training_state.yaml"
 
 
 class StateManager:
-    def __init__(self, storage: StorageBackend, state_folder: str):
+    def __init__(self, storage: StorageBackend, state_path: str):
         self._storage = storage
-        self._path = f"{state_folder}/{STATE_FILENAME}"
+        # state_path can be a folder (legacy) or a full file path.
+        # If it ends with .yaml, treat it as a file path; otherwise append filename.
+        if state_path.endswith(".yaml"):
+            self._path = state_path
+        else:
+            self._path = f"{state_path}/{STATE_FILENAME}"
 
     @property
     def path(self) -> str:

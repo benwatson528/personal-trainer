@@ -50,7 +50,7 @@ def test_read_reference_jt(executor):
 
 def test_adapt_workout_enforces_policy(executor):
     prescription = {"exercises": [{"name": "Squat (Barbell)", "sets": 3, "reps": 5, "weight": 100}]}
-    # Within policy: 5% load change.
+    # Within policy: load adjustment is allowed (no fixed percentage limit)
     ok = executor.execute("adapt_workout", {
         "programme_id": "jnt_2",
         "prescription": prescription,
@@ -58,15 +58,14 @@ def test_adapt_workout_enforces_policy(executor):
         "reason": "felt strong",
     })
     assert ok["ok"]
-    # Beyond policy: 25% load change rejected.
-    bad = executor.execute("adapt_workout", {
+    # Larger load changes are now allowed (no fixed percentage limit)
+    large = executor.execute("adapt_workout", {
         "programme_id": "jnt_2",
         "prescription": prescription,
         "adaptations": [{"type": "load", "percent": 25}],
         "reason": "felt very strong",
     })
-    assert not bad["ok"]
-    assert "exceeds" in bad["error"]
+    assert large["ok"], "Large load changes are now allowed without fixed limits"
 
 
 def test_adapt_workout_rejects_unknown_type(executor):

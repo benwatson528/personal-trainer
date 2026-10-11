@@ -51,13 +51,15 @@ class TrainingPreferences(BaseModel):
 
 
 class AdaptationPolicy(BaseModel):
-    """Configurable boundaries for controlled adaptation (spec section 19)."""
+    """Configurable boundaries for controlled adaptation (spec section 19).
+
+    Fixed percentage limits removed — the agent determines appropriate
+    adaptation magnitudes based on the athlete's history and context.
+    """
 
     allow_load_adjustment: bool = True
-    max_load_change_percent: float = 10.0
     allow_rep_adjustment: bool = True
     allow_volume_adjustment: bool = True
-    max_volume_change_percent: float = 25.0
     allow_rest_adjustment: bool = True
     allow_exercise_substitution: bool = True
 
